@@ -1,6 +1,5 @@
 # src/unpacker.py
 
-import os
 import zipfile
 import rarfile # Убедитесь, что установлен: pip install rarfile
 import tarfile
