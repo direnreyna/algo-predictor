@@ -30,3 +30,4 @@ search_space:
       low: 0.01
       high: 0.1
       log: true # log=true - хороший выбор для learning_rate
+

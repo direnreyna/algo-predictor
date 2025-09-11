@@ -9,6 +9,9 @@ from .feature_engineer import FeatureEngineer
 from .data_splitter import DataSplitter
 from .data_labeler import DataLabeler
 from .data_saver import DataSaver
+from .entities import ExperimentConfig
+from .file_loader import FileLoader
+from .cache_utils import get_cache_filename
 
 class DataPreparer:
     """
@@ -30,13 +33,14 @@ class DataPreparer:
     def __init__(self, cfg: AppConfig, log: AppLogger):
         self.cfg = cfg
         self.log = log
+        self.file_loader = FileLoader(cfg, log)
         self.feature_engineer = FeatureEngineer(cfg, log)
         self.data_labeler = DataLabeler(cfg, log)
         self.data_splitter = DataSplitter(cfg, log)
         self.data_saver = DataSaver(cfg, log)
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
-    def run(self, df: pd.DataFrame) -> None: # Возвращать будет несколько выборок
+    def run(self, experiment_cfg: ExperimentConfig) -> None:
         """
         Выполняет полный цикл предобработки данных.
         
@@ -45,25 +49,32 @@ class DataPreparer:
         """
         self.log.info("Начало процесса предобработки данных")
         
-        # 0. ПРОПУСКАЕМ, если данные уже обработаны и сохранены на диск в формате .npz
-        if self.cfg.PREPARED_DATA_PATH.exists():
-            self.log.info(f"Найден готовый файл с данными '{self.cfg.PREPARED_DATA_PATH.name}'. Пропускаем генерацию.")
-            return
+        # 0. Генерируем имя файла и проверяем кеш
+        cache_filename = get_cache_filename(experiment_cfg, self.cfg.PREPROCESSING_VERSION)
+        cache_path = self.cfg.DATA_DIR / cache_filename
 
+        # 1. ПРОПУСКАЕМ, если данные уже обработаны и сохранены на диск в формате .npz
+        if cache_path.exists():
+            self.log.info(f"Найден готовый файл с данными '{cache_filename}'. Пропускаем генерацию.")
+            return
         self.log.info("Готовые данные не найдены. Запуск полного цикла предобработки.")
         
-        # 1. Обогащение признаками (Feature Engineering)
-        df_with_features = self.feature_engineer.run(df)
+        # 2: Загрузка данных
+        file_name = f"{experiment_cfg.asset_name}.csv" 
+        df = self.file_loader.read_csv(file_name)
+
+        # 3. Обогащение признаками (Feature Engineering)
+        df_with_features = self.feature_engineer.run(df, experiment_cfg)
+
+        # 4. Обогащение доп. данными (пока пропуск)
         
-        # 2. Обогащение доп. данными (пока пропуск)
+        # 5. Создание целевой переменной
+        df_labeled = self.data_labeler.run(df_with_features, experiment_cfg)
         
-        # 3. Создание целевой переменной
-        df_labeled = self.data_labeler.run(df_with_features)
-        
-        # 4. Разделение на выборки и Нормализация
-        train_df, val_df, test_df = self.data_splitter.run(df_labeled)
-        
-        # 5. Сохранение выборок
-        self.data_saver.save(train=train_df, validation=val_df, test=test_df)
+        # 6. Разделение на выборки и Нормализаци
+        train_df, val_df, test_df = self.data_splitter.run(df_labeled, experiment_cfg)
+
+        # 7. Сохранение выборок
+        self.data_saver.save(file_path=cache_path, train=train_df, validation=val_df, test=test_df)
         
         self.log.info("Процесс предобработки данных завершен.")

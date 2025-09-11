@@ -6,6 +6,7 @@ from src.file_loader import FileLoader
 from src.data_preparer import DataPreparer
 from src.model_trainer import ModelTrainer
 from src.inferencer import Inferencer
+from src.entities import ExperimentConfig
 
 class ValuePredictor:
     """
@@ -30,16 +31,27 @@ class ValuePredictor:
         self.log.info("Начало основного процесса.")
         
         try:
-            # 1: Загрузка данных
-            df = self.loader.run()
+            # 1: Предварительная синхронизация всех источников данных
+            self.log.info("Синхронизация источников данных...")
+            self.loader.sync_data_sources()
+        
+            # 2: Подготовка датасета
+            # Создаем "ручной" ExperimentConfig на основе глобального AppConfig
+            manual_experiment_config = ExperimentConfig(
+                asset_name=self.cfg.ASSET_NAME,
+                feature_set_name=self.cfg.ACTIVE_FEATURE_SET_NAME,
+                labeling_horizon=self.cfg.HORIZON,
+                model_type="default_model", # Или берем из AppConfig
+                model_params={} # Или берем из AppConfig
+            )
+            # DataPreparer теперь самодостаточен и сам загрузит нужный файл
+            self.preparer.run(experiment_cfg=manual_experiment_config)
 
-            # 2: Подготовка датасета (обогаение фичами, разделение на выборки, нормирование, нарезка на окна)
-            self.preparer.run(df)
-            
-            # Шаг 3: Создание, обучение и оценка модели
-            self.trainer.run()
+          
+            # 3: Создание, обучение и оценка модели
+            self.trainer.run(experiment_cfg=manual_experiment_config)
 
-            # Шаг 4: Предсказание модели
+            # 4: Предсказание модели
             self.inferencer.run()
 
             self.log.info("Основной процесс успешно завершен.")

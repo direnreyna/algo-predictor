@@ -95,10 +95,10 @@ class AppConfig:
         self.ASSET_NAME = self.DATA_FILE.split('.')[0]
 
         # 3. Формирование имени файла для кеша
-        self.PREPARED_DATA_FILENAME = f"{self.ASSET_NAME}_{self.ACTIVE_FEATURE_SET_NAME}_{self.PREPROCESSING_VERSION}.npz"
+        ### self.PREPARED_DATA_FILENAME = f"{self.ASSET_NAME}_{self.ACTIVE_FEATURE_SET_NAME}_{self.PREPROCESSING_VERSION}.npz"
         
         # Формируем путь к этому файлу
-        self.PREPARED_DATA_PATH = self.DATA_DIR / self.PREPARED_DATA_FILENAME
+        ### self.PREPARED_DATA_PATH = self.DATA_DIR / self.PREPARED_DATA_FILENAME
 
         # 4. Параметры создания целевой переменной (Labeling)
         self.HORIZON = 5

@@ -4,6 +4,8 @@ import pandas as pd
 from .app_config import AppConfig
 from .app_logger import AppLogger
 from .data_saver import DataSaver        
+from .entities import ExperimentConfig
+from .cache_utils import get_cache_filename
 
 class ModelTrainer:
     """
@@ -19,7 +21,7 @@ class ModelTrainer:
         self.data_saver = DataSaver(cfg, log)
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
-    def run(self):
+    def run(self, experiment_cfg: ExperimentConfig) -> dict:
         """
         Запускает полный цикл:
         - Нарезка данных на последовательности.
@@ -28,4 +30,19 @@ class ModelTrainer:
         - Сохранение лучшей модели.
         """
         self.log.info("Запуск процесса обучения модели...")
-        datasets = self.data_saver.load()
+
+        # 1. Определяем, какой файл с данными нам нужен
+        cache_filename = get_cache_filename(experiment_cfg, self.cfg.PREPROCESSING_VERSION)
+        cache_path = self.cfg.DATA_DIR / cache_filename
+
+        # ПРИМЕЧАНИЕ: Логика self.data_saver.load() должна будет
+        # научиться определять нужный файл на основе experiment_cfg.
+        # Пока оставляем как есть.
+        datasets = self.data_saver.load(file_path=cache_path)
+        
+        # --- ЗАГЛУШКА: Эмулируем результаты обучения ---
+        import random
+        ml_metrics = {"accuracy": random.uniform(0.5, 0.6), "loss": random.uniform(0.8, 1.2)}
+        # --- КОНЕЦ ЗАГЛУШКИ ---
+        self.log.info("Процесс обучения (заглушка) завершен.")
+        return ml_metrics

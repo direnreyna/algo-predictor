@@ -4,6 +4,7 @@ from typing import Tuple
 import pandas as pd
 from .app_config import AppConfig
 from .app_logger import AppLogger
+from .entities import ExperimentConfig
 
 class DataSplitter:
     """
@@ -14,7 +15,7 @@ class DataSplitter:
         self.log = log
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
-    def run(self, df:pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def run(self, df:pd.DataFrame, experiment_cfg: ExperimentConfig) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Разделяет и масштабирует данные на train, validation и test.
 

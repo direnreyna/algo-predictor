@@ -8,8 +8,9 @@ from pathlib import Path
 from src.app_config import AppConfig
 from src.app_logger import AppLogger
 from src.mlflow_manager import MLflowRunManager
-# from src.experiment_runner import ExperimentRunner # Этот класс мы сейчас проектируем мысленно
+from src.experiment_runner import ExperimentRunner
 from src.entities import ExperimentConfig
+from src.file_loader import FileLoader
 
 class SearchOrchestrator:
     """
@@ -102,15 +103,15 @@ class SearchOrchestrator:
 
             try:
                 # 3. Создаем и запускаем "прораба", который выполнит всю грязную работу
-                # runner = ExperimentRunner(global_cfg=self.cfg, experiment_cfg=experiment_config)
-                # financial_metrics, ml_metrics = runner.run() # Этот метод должен вернуть словари с метриками
+                runner = ExperimentRunner(global_cfg=self.cfg, experiment_cfg=experiment_config)
+                financial_metrics, ml_metrics = runner.run() # Этот метод возвращает словари с метриками
                 
-                # --- ЗАГЛУШКА: Эмулируем работу runner ---
-                import random
-                if random.random() < 0.1: raise ValueError("Случайная ошибка симуляции") ##ДОБАВЛЕНО для теста
-                financial_metrics = {"sharpe_ratio": random.uniform(0.5, 2.5), "max_drawdown": -random.uniform(0.05, 0.2)}
-                ml_metrics = {"accuracy": random.uniform(0.5, 0.6)}
-                # --- КОНЕЦ ЗАГЛУШКИ ---
+                ### # --- ЗАГЛУШКА: Эмулируем работу runner ---
+                ### import random
+                ### if random.random() < 0.1: raise ValueError("Случайная ошибка симуляции") ##ДОБАВЛЕНО для теста
+                ### financial_metrics = {"sharpe_ratio": random.uniform(0.5, 2.5), "max_drawdown": -random.uniform(0.05, 0.2)}
+                ### ml_metrics = {"accuracy": random.uniform(0.5, 0.6)}
+                ### # --- КОНЕЦ ЗАГЛУШКИ ---
 
                 # 4. Логируем результаты в MLflow
                 self.log.info(f"Эксперимент {run_name} завершен. Sharpe: {financial_metrics['sharpe_ratio']:.2f}")
@@ -130,6 +131,11 @@ class SearchOrchestrator:
         """
         Запускает весь процесс поиска.
         """
+
+        self.log.info("Синхронизация источников данных...")
+        file_loader = FileLoader(self.cfg, self.log)
+        file_loader.sync_data_sources()
+
         self.log.info(f"Запуск процесса поиска. Количество экспериментов: {n_trials}")
         
         # Создаем "исследование" в Optuna. direction="maximize" означает, что мы хотим максимизировать результат objective
