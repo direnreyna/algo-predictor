@@ -1,4 +1,6 @@
 # src/app_config.py
+
+import os
 from pathlib import Path
 
 def find_project_root(marker_file=".project-root"):
@@ -13,6 +15,8 @@ def find_project_root(marker_file=".project-root"):
 # Определяем корень проекта ОДИН РАЗ
 PROJECT_ROOT = find_project_root()
 LOCAL_ROOT = Path(__file__).resolve().parent.parent
+MLFLOW_RUNS_PATH = LOCAL_ROOT / "mlruns"
+MLFLOW_TRACKING_URI = f"file:///{MLFLOW_RUNS_PATH.as_posix()}" # .as_posix() для кросс-платформенности
 
 class AppConfig:
     """
@@ -33,6 +37,7 @@ class AppConfig:
         # Пути к данным и моделям
         self.PROJECT_ROOT = PROJECT_ROOT
         self.LOCAL_ROOT = LOCAL_ROOT
+        self.MLFLOW_RUNS_PATH = MLFLOW_RUNS_PATH
 
         self.DATA_DIR = LOCAL_ROOT / "data"
         self.MODELS_DIR = LOCAL_ROOT / "models"
@@ -109,6 +114,7 @@ class AppConfig:
 
         # ВЫПОЛНЯЕМ СОЗДАНИЕ ПАПОК ОДИН РАЗ ПРИ ИМПОРТЕ МОДУЛЯ
         self._setup_directories()
+
         self._initialized = True
 
     ######################################################################
