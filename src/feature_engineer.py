@@ -57,7 +57,50 @@ class FeatureEngineer:
                 
                 for indicator_str in standard_indicators:
                     try:
+                        # --- Диагностический блок 1 ---
+                        before_nan_count = df_copy.isna().sum().sum()
+                        # --- Конец блока ---
+
+                        # --- Устойчивый блок с проверкой ---
+                        cols_before = set(df_copy.columns)
                         self._apply_indicator(df_copy, indicator_str)
+                        cols_after = set(df_copy.columns)
+                        new_cols = list(cols_after - cols_before)
+
+                        # Проверяем новые колонки на полную пустоту
+                        sanitized_new_cols = new_cols.copy()          # Список новых колонок для проверки на NaN
+                        for col in new_cols:
+                            # Если среди новых колонок есть колонка целиком состоящая из NaN
+                            if df_copy[col].isna().all():
+                                self.log.warning(f"Индикатор '{indicator_str}' создал полностью пустую колонку '{col}'. Колонка будет удалена.")
+                                # Удаляем такую колонку
+                                df_copy.drop(columns=[col], inplace=True)
+                                # Удаляем такую колонку из списка новых колонок для проверки на NaN
+                                sanitized_new_cols.remove(col)
+                        
+                        # Проверяем на "вредность" (более 50% NaN в совокупности новых неудаленных колонок)
+                        if sanitized_new_cols: # Если после чистки "на 100% NaN" что-то осталось
+                            temp_df = df_copy[sanitized_new_cols]
+                            # Количество строк, содержащих NaN
+                            n_damaged_rows = temp_df.isna().any(axis=1).sum()
+                            # Процент строк, содержащих NaN
+                            damage_ratio = n_damaged_rows / len(df_copy)
+                            
+                            if damage_ratio > 0.5:
+                                self.log.warning(
+                                    f"Индикатор '{indicator_str}' признан 'вредным' "
+                                    f"(портит {damage_ratio:.1%} строк). Колонки {sanitized_new_cols} будут удалены."
+                                )
+                                # Удаляем все такие колонки
+                                df_copy.drop(columns=sanitized_new_cols, inplace=True)
+                        # --- Конец блока ---
+
+                        # --- Диагностический блок 2 ---
+                        after_nan_count = df_copy.isna().sum().sum()
+                        new_nans = after_nan_count - before_nan_count
+                        self.log.info(f"  -> {indicator_str}: добавлено {new_nans} NaN.")
+                        # --- Конец блока ---
+
                     except Exception as e:
                         self.log.error(f"Ошибка при расчете индикатора '{indicator_str}': {e}")
                         # Можно либо проигнорировать, либо прервать выполнение
@@ -70,52 +113,45 @@ class FeatureEngineer:
                 method_to_call = getattr(self, f"_calculate_{name}")
                 df_copy = method_to_call(df_copy)
 
-        # 5. Очистка от NaN
+        # --- Диагностика: Состояние NaN перед финальной очисткой ---
+        self.log.info(f"Состояние NaN перед финальной очисткой (Total={df_copy.isna().sum().sum()}):\n{df_copy.isna().sum()}")
+        # --- Конец Диагностики ---
+
+        ### # 5. Очистка от NaN
+        ### initial_rows = len(df_copy)
+        ### df_copy.dropna(inplace=True)
+        ### final_rows = len(df_copy)
+        ### self.log.info(f"Очистка от NaN: удалено {initial_rows - final_rows} строк.")
+        
+        # 5. Финальная очистка: заполнение и отсечение периода прогрева ##ДОБАВЛЕН БЛОК
+        # 5.1 Заполняем пропуски в середине данных (от выходных и т.д.)
+        initial_nan_count = df_copy.isna().sum().sum()
+        if initial_nan_count > 0:
+            df_copy.ffill(inplace=True)
+            filled_nan_count = initial_nan_count - df_copy.isna().sum().sum()
+            self.log.info(f"Заполнение NaN (forward fill): заполнено {filled_nan_count} значений.")
+
+        # 5.2 Отсекаем начальный период "прогрева", где ffill не смог помочь
+        # Считаем, сколько NaN осталось в начале каждой колонки. Логика:
+        # ===============================================================
+        # df_copy.notna() = делает все NaN = False, остальные = True.
+        # cumsum() = кумулятивная сумма. Все первые False дадут 0, первый True изменил сумму на > 0.
+        # == 0 создаст маску, где каждый 0 станет True (нули только в начале)
+        # .sum() - сосчитает количество начальных 0.
+        # ===============================================================
+        initial_nans_per_col = (df_copy.notna().cumsum() == 0).sum()
+        max_lookback = initial_nans_per_col.max()
+        
         initial_rows = len(df_copy)
-        df_copy.dropna(inplace=True)
+        if max_lookback > 0:
+            self.log.info(f"Максимальный период прогрева: {max_lookback} баров. Отсекаем...")
+            df_copy = df_copy.iloc[max_lookback:]
+        
         final_rows = len(df_copy)
-        self.log.info(f"Очистка от NaN: удалено {initial_rows - final_rows} строк.")
+        self.log.info(f"Отсечение периода прогрева: удалено {initial_rows - final_rows} строк.")
         
         self.log.info(f"Генерация признаков завершена. Итоговая форма данных: {df_copy.shape}")
         return df_copy
-    
-###     def _parse_indicator_string(self, indicator_str: str) -> tuple[str, dict]:
-###         """
-###         Парсит строку индикатора в имя и словарь параметров.
-###         Пример: 'RSI_14' -> ('rsi', {'length': 14})
-###                  'MACD_12_26_9' -> ('macd', {'fast': 12, 'slow': 26, 'signal': 9})
-###         """
-###         parts = indicator_str.split('_')
-###         name = parts[0]
-###         params = parts[1:]
-###         
-###         # pandas-ta использует стандартные имена для параметров
-###         # Это маппинг для самых распространенных из них
-###         param_names_map = {
-###             'RSI': ['length'],
-###             'MACD': ['fast', 'slow', 'signal'],
-###             'STOCHk': ['k', 'd', 'smooth_k'],
-###             'BBP': ['length', 'std'],
-###             'ATR': ['length'],
-###             'OBV': [],
-###         }
-###         
-###         if name.upper() not in param_names_map:
-###             # Для неизвестных индикаторов предполагаем универсальный параметр 'length'
-###             if len(params) == 1:
-###                  return name, {'length': int(params[0])}
-###             raise ValueError(f"Неизвестная структура параметров для индикатора: {name}")
-### 
-###         param_names = param_names_map[name.upper()]
-###         if len(param_names) != len(params):
-###             raise ValueError(f"Неверное количество параметров для {name}. Ожидается {len(param_names)}, получено {len(params)}")
-### 
-###         # Преобразуем строковые параметры в числа (int или float)
-###         typed_params = []
-###         for p in params:
-###             typed_params.append(float(p) if '.' in p else int(p))
-### 
-###         return name, dict(zip(param_names, typed_params))
 
     def _apply_indicator(self, df: pd.DataFrame, indicator_str: str) -> None:
         """

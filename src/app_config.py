@@ -81,6 +81,24 @@ class AppConfig:
             # Пример кастомного индикатора
             "custom_indicators": ['custom_test_indicator'],
 
+            # >>> НОВЫЙ НАБОР ДЛЯ СТРЕСС-ТЕСТА <<<
+            "stress_test_features": [
+                # Momentum Indicators (период 14 для всех)
+                "ao_5_34", "apo_12_26", "bias_14", "bop", "cci_14", "cmo_14",
+                "coppock_11_14_10", "fisher_14_1", "inertia_14_10", "kdj_9_3", 
+                "kst_10_15_20_30", "mom_14", "ppo_12_26_9", "roc_14", "rsi_14",
+                "rsx_14", "stoch_14_3_3", "trix_14_9", "tsi_13_25_13", "uo_7_14_28", "willr_14",
+                # Volatility Indicators (период 14)
+                "atr_14", "bbands_14_2.0", "donchian_14", "kc_14_3", "massi_9_25", "natr_14",
+                # Trend Indicators (период 14)
+                "adx_14", "aroon_14", "chop_14", "dpo_14", "psar_0.02_0.2", "vortex_14",
+                # Volume Indicators (период 14)
+                "adosc_3_10", "cmf_14", "efi_13", "eom_14", "mfi_14", "nvi_1", "obv", "pvi_1",
+                "pvol", "pvt",
+                # Custom
+                "custom_test_indicator"
+            ],
+
             # Комбинированные наборы, использующие базовые и кастомные
             "base_indicators": [
                 "ohlcv", "momentum_indicators", "trend_indicators", "volatility_indicators", "volume_indicators", "custom_indicators"

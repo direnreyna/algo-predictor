@@ -1,11 +1,10 @@
-    
 # Имя эксперимента для MLflow
-experiment_name: "Test Search EURUSD LightGBM"
+experiment_name: "Stress Test - Large Feature Set"
 
 # --- "Замороженные" параметры ---
 asset_name: "EURUSD_D"
 model_type: "lightgbm"
-task_type: "regression" # regression / categorical
+task_type: "regression"
 
 # Карта для файла без заголовка
 column_mapping:
@@ -19,26 +18,25 @@ column_mapping:
     
 # --- Секция для перебора Optuna ---
 search_space:
-  # Параметры предобработки
+  # Используем только один, но очень большой набор признаков
   feature_set_name:
-    type: categorical # regression / categorical
-    choices: ["base_indicators", "ohlcv_with_rsi"]
+    type: categorical
+    choices: ["stress_test_features"]
   
   labeling_horizon:
     type: int
-    low: 5
-    high: 10 # Уменьшим диапазон для быстрого теста
+    low: 30 # Увеличим горизонт, так как некоторые индикаторы требуют длинной истории
+    high: 40
 
-  # Вложенные параметры модели
+  # Вложенные параметры модели (оставим для полноты картины)
   model_params:
     n_estimators:
       type: int
       low: 50
-      high: 150
+      high: 100
     
     learning_rate:
       type: float
-      low: 0.01
+      low: 0.05
       high: 0.1
-      log: true # log=true - хороший выбор для learning_rate
-
+      log: true

@@ -64,6 +64,14 @@ class DataPreparer:
         file_name = f"{experiment_cfg.asset_name}.csv" 
         df = self.file_loader.read_csv(file_name, experiment_cfg=experiment_cfg)
 
+        # --- Диагностика: Проверяем NaN после загрузки ---
+        initial_nan_count = df.isna().sum().sum()
+        if initial_nan_count > 0:
+            self.log.warning(f"В исходных данных после загрузки обнаружено {initial_nan_count} NaN.")
+        else:
+            self.log.info("Проверка исходных данных: NaN не обнаружены.")
+        # --- Конец Диагностики ---
+
         # 3. Обогащение признаками (Feature Engineering)
         df_with_features = self.feature_engineer.run(df, experiment_cfg)
 
