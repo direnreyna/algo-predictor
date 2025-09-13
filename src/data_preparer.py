@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import joblib
 
 from .app_config import AppConfig
 from .app_logger import AppLogger
@@ -61,7 +62,7 @@ class DataPreparer:
         
         # 2: Загрузка данных
         file_name = f"{experiment_cfg.asset_name}.csv" 
-        df = self.file_loader.read_csv(file_name)
+        df = self.file_loader.read_csv(file_name, experiment_cfg=experiment_cfg)
 
         # 3. Обогащение признаками (Feature Engineering)
         df_with_features = self.feature_engineer.run(df, experiment_cfg)
@@ -72,9 +73,18 @@ class DataPreparer:
         df_labeled = self.data_labeler.run(df_with_features, experiment_cfg)
         
         # 6. Разделение на выборки и Нормализаци
-        train_df, val_df, test_df = self.data_splitter.run(df_labeled, experiment_cfg)
+        train_df, val_df, test_df, scaler = self.data_splitter.run(df_labeled, experiment_cfg)
 
-        # 7. Сохранение выборок
+        # 7. Сохранение скейлера
+        scaler_path = cache_path.with_suffix('.joblib')
+        try:
+            joblib.dump(scaler, scaler_path)
+            self.log.info(f"Скейлер успешно сохранен в '{scaler_path.name}'")
+        except Exception as e:
+            self.log.error(f"Ошибка при сохранении скейлера: {e}")
+            raise
+
+        # 8. Сохранение выборок
         self.data_saver.save(file_path=cache_path, train=train_df, validation=val_df, test=test_df)
         
         self.log.info("Процесс предобработки данных завершен.")

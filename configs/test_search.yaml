@@ -5,12 +5,23 @@ experiment_name: "Test Search EURUSD LightGBM"
 # --- "Замороженные" параметры ---
 asset_name: "EURUSD_D"
 model_type: "lightgbm"
+task_type: "regression" # regression / categorical
 
+# Карта для файла без заголовка
+column_mapping:
+  0: "Date"
+  1: "Time"
+  2: "Open"
+  3: "High"
+  4: "Low"
+  5: "Close"
+  6: "Volume"
+    
 # --- Секция для перебора Optuna ---
 search_space:
   # Параметры предобработки
   feature_set_name:
-    type: categorical
+    type: categorical # regression / categorical
     choices: ["base_indicators", "ohlcv_with_rsi"]
   
   labeling_horizon:

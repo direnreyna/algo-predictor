@@ -41,6 +41,8 @@ class ValuePredictor:
                 asset_name=self.cfg.ASSET_NAME,
                 feature_set_name=self.cfg.ACTIVE_FEATURE_SET_NAME,
                 labeling_horizon=self.cfg.HORIZON,
+                task_type=self.cfg.TASK_TYPE,
+                column_mapping=None, # Для ручного запуска предполагаем, что заголовок есть
                 model_type="default_model", # Или берем из AppConfig
                 model_params={} # Или берем из AppConfig
             )

@@ -15,16 +15,21 @@ class ExperimentRunner:
     """
     Выполняет один конкретный эксперимент от начала до конца.
     """
-    def __init__(self, global_cfg: AppConfig, experiment_cfg: ExperimentConfig):
+    def __init__(self, 
+                 global_cfg: AppConfig, 
+                 experiment_cfg: ExperimentConfig,
+                 data_preparer: DataPreparer,
+                 model_trainer: ModelTrainer,
+                 backtester: Backtester):
         self.cfg = global_cfg
         self.log = AppLogger()
         self.experiment_cfg = experiment_cfg
         
-        # Инициализируем все необходимые "инструменты"
-        self.data_preparer = DataPreparer(self.cfg, self.log)
-        self.model_trainer = ModelTrainer(self.cfg, self.log)
-        self.backtester = Backtester(self.cfg, self.log)
-        
+        # Присваиваем переданные экземпляры
+        self.data_preparer = data_preparer
+        self.model_trainer = model_trainer
+        self.backtester = backtester
+
         self.log.info(f"Класс {self.__class__.__name__} инициализирован для эксперимента.")
 
     def run(self) -> Tuple[dict, dict]:

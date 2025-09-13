@@ -14,6 +14,7 @@ def get_cache_filename(experiment_cfg: ExperimentConfig, version: str) -> str:
         "asset_name": experiment_cfg.asset_name,
         "feature_set_name": experiment_cfg.feature_set_name,
         "labeling_horizon": experiment_cfg.labeling_horizon,
+        "task_type": experiment_cfg.task_type,
         # Добавьте сюда любые другие параметры из ExperimentConfig,
         # которые влияют на предобработку данных.
     }

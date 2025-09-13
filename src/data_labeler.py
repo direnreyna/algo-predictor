@@ -24,10 +24,11 @@ class DataLabeler:
         :return: DataFrame с добавленным столбцом 'target'.
         """
 
-        self.log.info(f"Создание целевой переменной для задачи типа '{self.cfg.TASK_TYPE}'...")
-        if self.cfg.TASK_TYPE == "classification":
+        self.log.info(f"Создание целевой переменной для задачи типа '{experiment_cfg.task_type}'...")
+        df_copy = df.copy()
 
-            df_copy = df.copy()
+        if experiment_cfg.task_type == "classification":
+
             horizon = experiment_cfg.labeling_horizon
             threshold = self.cfg.THRESHOLD
 
@@ -40,7 +41,7 @@ class DataLabeler:
             # 2. Определение моментов касания барьеров
             upper_barrier_hits = (future_returns > threshold).idxmax(axis=1)
             lower_barrier_hits = (future_returns < -threshold).idxmax(axis=1)
-            
+
             # 3. Маски для случаев, когда барьеры не были достигнуты (idxmax вернет 0, т.е. первый столбец)
             no_upper_hit_mask = (future_returns.loc[upper_barrier_hits.index, 1] <= threshold)
             upper_barrier_hits[no_upper_hit_mask] = np.nan
@@ -54,7 +55,7 @@ class DataLabeler:
             
             # 5. Присвоение финальных меток
             # Инициализируем 'target' значением для бокового движения
-            df_copy['target'] = 1
+            df_copy['target'] = 1 # SIDEWAYS
             
             # Верхний барьер достигнут первым
             df_copy.loc[first_hit_time == upper_barrier_hits, 'target'] = 2 # UP
@@ -67,14 +68,12 @@ class DataLabeler:
             # Можно добавить логику для определения направления на последнем шаге,
             # но классический TBM оставляет это как нейтральный исход.
 
-            df = df_copy
-            df.dropna(inplace=True)
-
-        elif self.cfg.TASK_TYPE == "regression":
-            # Другая логика, например, предсказываем будущее изменение цены
-            df['target'] = df['Close'].shift(-experiment_cfg.labeling_horizon) / df['Close'] - 1
-            df.dropna(inplace=True)
+        elif experiment_cfg.task_type == "regression":
+            self.log.info("Создание целевых переменных для регрессии (прогноз на 1 день).")
+            df_copy['target_high'] = df_copy['High'].shift(-1)
+            df_copy['target_low'] = df_copy['Low'].shift(-1)
         else:
-            raise ValueError(f"Неизвестный тип задачи: {self.cfg.TASK_TYPE}")
-        
-        return df
+          raise ValueError(f"Неизвестный тип задачи: {experiment_cfg.task_type}")
+
+        df_copy.dropna(inplace=True)
+        return df_copy

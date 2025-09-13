@@ -4,6 +4,7 @@ import os
 import pandas as pd
 from .app_config import AppConfig
 from .app_logger import AppLogger
+from .entities import ExperimentConfig
 from .downloader import Downloader
 from .unpacker import Unpacker
 from pathlib import Path
@@ -35,10 +36,11 @@ class FileLoader:
         
         self.log.info("--- Синхронизация источников данных завершена ---")
 
-    def read_csv(self, file_name: str) -> pd.DataFrame:
+    def read_csv(self, file_name: str, experiment_cfg: ExperimentConfig) -> pd.DataFrame:
         """
         Читает указанный CSV-файл из директории с данными.
         :param file_name: Имя файла (например, "EURUSD_D.csv").
+        :param experiment_cfg: Конфигурация эксперимента для доступа к column_mapping.
         :return: DataFrame с данными.
         """
         file_path = self.cfg.DATA_DIR / file_name
@@ -50,45 +52,107 @@ class FileLoader:
             raise FileNotFoundError(error_msg)
             
         try:
-            df = pd.read_csv(file_path)
+            # 1. Сначала проверяем, предоставил ли пользователь явную карту столбцов
+            if experiment_cfg.column_mapping:
+                self.log.info("Обнаружена явная карта столбцов 'column_mapping' в конфиге. Используем ее.")
+                col_names = list(experiment_cfg.column_mapping.values())
+                #df = pd.read_csv(file_path, header=None, names=col_names, skiprows=1) # skiprows=1 если в файле есть заголовок, который нужно игнорировать
+                df = pd.read_csv(file_path, header=None, names=col_names, skiprows=0) # skiprows=1 если в файле есть заголовок, который нужно игнорировать ##ИЗМЕНЕНО
+
+                # 1. Определяем, есть ли в файле заголовок, по наличию букв в первой строке.
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    first_line = f.readline().strip()
+
+                    # Если в файле есть заголовок, его нужно пропустить при чтении
+                    if any(char.isalpha() for char in first_line):
+                        df = pd.read_csv(file_path, header=None, names=col_names, skiprows=1)
+
+                    num_columns_in_file = len(first_line.split(','))
+                    if num_columns_in_file != len(col_names):
+                        raise ValueError(f"Карта столбцов в конфиге ожидает {len(col_names)} столбцов, "
+                                         f"но в файле '{file_name}' найдено {num_columns_in_file}.")
+                
+                self.log.info(f"Данные успешно загружены по карте. Размер: {df.shape}")
+                return df
+                        
+            # 2. Если карта не предоставлена, переходим к авто-определению
+            with open(file_path, 'r', encoding='utf-8') as f:
+                first_line = f.readline().strip()
+
+            has_header = any(char.isalpha() for char in first_line)
+
+            if has_header:
+                self.log.info("Обнаружена строка заголовка. Загрузка данных со стандартной обработкой.")
+                df = pd.read_csv(file_path)
+                # После загрузки приводим потенциально разные имена к нашему стандарту
+                df_columns_lower = {col.lower().strip(): col for col in df.columns}
+                rename_map = {}
+
+                possible_names = {
+                    'Date': ['date', '<date>'], 'Time': ['time', '<time>'],
+                    'Open': ['open', '<open>'], 'High': ['high', 'max', '<high>'],
+                    'Low': ['low', 'min', '<low>'], 'Close': ['close', '<close>'],
+                    'Volume': ['volume', 'vol', '<vol>']
+                }
+
+                for standard_name, variants in possible_names.items():
+                    for variant in variants:
+                        if variant in df_columns_lower:
+                            rename_map[df_columns_lower[variant]] = standard_name
+                            break
+                df.rename(columns=rename_map, inplace=True)
+
+            else:
+                # Карта не предоставлена и заголовок не найден - падаем с ошибкой
+                raise ValueError(
+                    f"Файл '{file_name}' не содержит заголовка и 'column_mapping' не указан в конфиге. "
+                    f"Невозможно определить структуру данных."
+                )
+
+            # 3. Блок обработки datetime
+#            datetime_col = None
+#            if 'Date' in df.columns and 'Time' in df.columns:
+#                self.log.info("Обнаружены колонки 'Date' и 'Time'. Объединение в DatetimeIndex.")
+#                datetime_col = df['Date'] + ' ' + df['Time']
+#                cols_to_drop = ['Date', 'Time']
+#            elif 'Date' in df.columns:
+#                self.log.info("Обнаружена колонка 'Date'. Преобразование в DatetimeIndex.")
+#                datetime_col = df['Date']
+#                cols_to_drop = ['Date']
+            
+            datetime_col_name = "datetime_temp" # Временное имя колонки
+            cols_to_drop = []
+
+            if 'Date' in df.columns and 'Time' in df.columns:
+                self.log.info("Обнаружены колонки 'Date' и 'Time'. Объединение в DatetimeIndex.")
+                df[datetime_col_name] = df['Date'] + ' ' + df['Time']
+                cols_to_drop = ['Date', 'Time']
+            elif 'Date' in df.columns:
+                self.log.info("Обнаружена колонка 'Date'. Преобразование в DatetimeIndex.")
+                df[datetime_col_name] = df['Date']
+                cols_to_drop = ['Date']
+            
+            if cols_to_drop:
+                try:
+                    df[datetime_col_name] = pd.to_datetime(df[datetime_col_name], format='mixed', errors='coerce')
+                    df.set_index(datetime_col_name, inplace=True)
+                    df.drop(columns=cols_to_drop, inplace=True)
+
+                    # Удаляем строки, где дата не смогла быть преобразована
+                    df = df[df.index.notna()]
+                    self.log.info("DatetimeIndex успешно создан и установлен.")
+                except Exception as e:
+                    self.log.error(f"Критическая ошибка при создании DatetimeIndex: {e}")
+                    raise
+            else:
+                self.log.warning("Колонки 'Date'/'Time' не найдены. Данные не будут индексированы по времени.")
+            #
+
             self.log.info(f"Данные успешно загружены. Размер: {df.shape}")
             return df
         except Exception as e:
             self.log.error(f"Ошибка при чтении файла '{file_name}': {e}")
             raise
-
-###    def run(self) -> pd.DataFrame:
-###        """
-###        Выполняет полный пайплайн:
-###        1. Проверяет наличие ЦЕЛЕВОГО файла.
-###        2. Если его нет, скачивает все нужные архивы/файлы.
-###        3. Распаковывает все архивы в папке data/ и удаляет их.
-###        4. Загружает ЦЕЛЕВОЙ файл в DataFrame.
-###
-###        :return: DataFrame с исходными данными.
-###        """
-###        self.log.info("--- Начало процесса загрузки данных ---")
-###        
-###        #target_file_name = self.cfg.DATA_FILE
-###        target_file_path = self.cfg.DATA_DIR / self.cfg.DATA_FILE
-###
-###        # ГЛАВНАЯ ПРОВЕРКА: Если целевой файл уже есть, ничего не делаем
-###        if target_file_path.exists():
-###            self.log.info(f"Целевой файл '{self.cfg.DATA_FILE}' уже существует.")
-###        else:
-###            self.log.info(f"Целевой файл '{self.cfg.DATA_FILE}' не найден. Начинаем подготовку.")
-###        
-###            # 1: Скачиваем все файлы, для которых есть URL
-###            self._download_all_sources()
-###        
-###            # 2: Ищем и распаковываем все архивы в папке data/
-###            self._unpack_all_archives()
-###
-###        # 3: Читаем ЦЕЛЕВОЙ файл в DataFrame
-###        df = self._read_data(target_file_path)
-###
-###        self.log.info("--- Процесс загрузки и подготовки файлов завершен ---")
-###        return df
 
     def _download_all_sources(self):
         """Скачивает все файлы, указанные в DOWNLOAD_URLS."""
@@ -113,18 +177,3 @@ class FileLoader:
                         self.log.info(f"Исходный архив '{filename}' удален.")
                     except OSError as e:
                         self.log.error(f"Не удалось удалить архив '{filename}': {e}")
-
-###    def _read_data(self, filepath: Path) -> pd.DataFrame:
-###        """Приватный метод для чтения CSV."""
-###        self.log.info(f"Чтение данных из файла '{filepath.name}'...")
-###        try:
-###            # Здесь можно добавить логику для разных форматов (xlsx, json...)
-###            df = pd.read_csv(filepath)
-###            self.log.info(f"Данные успешно загружены. Размер: {df.shape}")
-###            return df
-###        except FileNotFoundError:
-###            self.log.error(f"Файл не найден: {filepath}")
-###            raise
-###        except Exception as e:
-###            self.log.error(f"Ошибка при чтении файла: {e}")
-###            raise

@@ -72,17 +72,19 @@ class AppConfig:
         # Словарь с базовыми и составными наборами
         _feature_sets = {
             # Базовые "строительные блоки"
-            "ohlcv": ['Open', 'Max', 'Min', 'Close', 'Volume'],
-            "momentum_indicators": ['RSI_14'],
-            "trend_indicators": ['MACDh_12_26_9', 'MACDs_12_26_9'],
-            "volatility_indicators": ['BBP_20_2.0', 'ATRr_14'],
-            "volume_indicators": ['OBV'],
+            "ohlcv": ['Open', 'High', 'Low', 'Close', 'Volume'],
+            "momentum_indicators": ['rsi_14', 'stoch_14_3_3'],
+            "volatility_indicators": ['bbands_20_2.0', 'atr_14'],
+            "trend_indicators": ['macd_12_26_9'],
+            "volume_indicators": ['obv'],
 
-            # Комбинированные наборы, использующие базовые
+            # Пример кастомного индикатора
+            "custom_indicators": ['custom_test_indicator'],
+
+            # Комбинированные наборы, использующие базовые и кастомные
             "base_indicators": [
-                "ohlcv", "momentum_indicators", "trend_indicators", "volatility_indicators", "volume_indicators"
+                "ohlcv", "momentum_indicators", "trend_indicators", "volatility_indicators", "volume_indicators", "custom_indicators"
             ],
-            # Кастомный набор (для примера)
             "ohlcv_with_rsi": ["ohlcv", "momentum_indicators"]
         }
 

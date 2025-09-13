@@ -11,6 +11,9 @@ from src.mlflow_manager import MLflowRunManager
 from src.experiment_runner import ExperimentRunner
 from src.entities import ExperimentConfig
 from src.file_loader import FileLoader
+from src.data_preparer import DataPreparer
+from src.model_trainer import ModelTrainer
+from src.backtester import Backtester
 
 class SearchOrchestrator:
     """
@@ -26,6 +29,10 @@ class SearchOrchestrator:
         self.base_config = base_config
         self.experiment_name = experiment_name
         self.search_space_config = base_config.get("search_space")
+        # Создаем экземпляры инструментов ОДИН РАЗ
+        self.data_preparer = DataPreparer(self.cfg, self.log)
+        self.model_trainer = ModelTrainer(self.cfg, self.log)
+        self.backtester = Backtester(self.cfg, self.log)        
 
         if not self.search_space_config:
             raise ValueError("Секция 'search_space' не найдена в файле конфигурации для поиска.")
@@ -103,7 +110,14 @@ class SearchOrchestrator:
 
             try:
                 # 3. Создаем и запускаем "прораба", который выполнит всю грязную работу
-                runner = ExperimentRunner(global_cfg=self.cfg, experiment_cfg=experiment_config)
+                ### runner = ExperimentRunner(global_cfg=self.cfg, experiment_cfg=experiment_config)
+                runner = ExperimentRunner(
+                    global_cfg=self.cfg, 
+                    experiment_cfg=experiment_config,
+                    data_preparer=self.data_preparer,
+                    model_trainer=self.model_trainer,
+                    backtester=self.backtester
+                )
                 financial_metrics, ml_metrics = runner.run() # Этот метод возвращает словари с метриками
                 
                 ### # --- ЗАГЛУШКА: Эмулируем работу runner ---
