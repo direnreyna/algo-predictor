@@ -52,49 +52,38 @@ class FileLoader:
             raise FileNotFoundError(error_msg)
             
         try:
-            # 1. Сначала проверяем, предоставил ли пользователь явную карту столбцов
-            if experiment_cfg.column_mapping:
-                self.log.info("Обнаружена явная карта столбцов 'column_mapping' в конфиге. Используем ее.")
-                col_names = list(experiment_cfg.column_mapping.values())
-                #df = pd.read_csv(file_path, header=None, names=col_names, skiprows=1) # skiprows=1 если в файле есть заголовок, который нужно игнорировать
-                df = pd.read_csv(file_path, header=None, names=col_names, skiprows=0) # skiprows=1 если в файле есть заголовок, который нужно игнорировать ##ИЗМЕНЕНО
-
-                # 1. Определяем, есть ли в файле заголовок, по наличию букв в первой строке.
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    first_line = f.readline().strip()
-
-                    # Если в файле есть заголовок, его нужно пропустить при чтении
-                    if any(char.isalpha() for char in first_line):
-                        df = pd.read_csv(file_path, header=None, names=col_names, skiprows=1)
-
-                    num_columns_in_file = len(first_line.split(','))
-                    if num_columns_in_file != len(col_names):
-                        raise ValueError(f"Карта столбцов в конфиге ожидает {len(col_names)} столбцов, "
-                                         f"но в файле '{file_name}' найдено {num_columns_in_file}.")
-                
-                self.log.info(f"Данные успешно загружены по карте. Размер: {df.shape}")
-                return df
-                        
-            # 2. Если карта не предоставлена, переходим к авто-определению
+            # 1. Определяем структуру файла по первой строке ##ДОБАВЛЕН БЛОК
             with open(file_path, 'r', encoding='utf-8') as f:
                 first_line = f.readline().strip()
-
+            
             has_header = any(char.isalpha() for char in first_line)
+            num_columns = len(first_line.split(','))
 
-            if has_header:
+            # 2. Логика загрузки на основе структуры
+            if not has_header:
+                self.log.info("Заголовок в файле не обнаружен.")
+                if num_columns == 7 and experiment_cfg.column_mapping:
+                    self.log.info(f"Обнаружено {num_columns} колонок. Применяем 'column_mapping' из конфига.")
+                    col_names = list(experiment_cfg.column_mapping.values())
+                    df = pd.read_csv(file_path, header=None, names=col_names)
+                else:
+                    raise ValueError(
+                        f"Файл '{file_name}' не содержит заголовка и имеет {num_columns} колонок (ожидалось 7) "
+                        f"или 'column_mapping' не предоставлен в конфиге. Автоматическая загрузка невозможна."
+                    )
+            else: # has_header is True
                 self.log.info("Обнаружена строка заголовка. Загрузка данных со стандартной обработкой.")
                 df = pd.read_csv(file_path)
-                # После загрузки приводим потенциально разные имена к нашему стандарту
+                
+                # Стандартизация имен колонок
                 df_columns_lower = {col.lower().strip(): col for col in df.columns}
                 rename_map = {}
-
                 possible_names = {
                     'Date': ['date', '<date>'], 'Time': ['time', '<time>'],
                     'Open': ['open', '<open>'], 'High': ['high', 'max', '<high>'],
                     'Low': ['low', 'min', '<low>'], 'Close': ['close', '<close>'],
                     'Volume': ['volume', 'vol', '<vol>']
                 }
-
                 for standard_name, variants in possible_names.items():
                     for variant in variants:
                         if variant in df_columns_lower:
@@ -102,24 +91,7 @@ class FileLoader:
                             break
                 df.rename(columns=rename_map, inplace=True)
 
-            else:
-                # Карта не предоставлена и заголовок не найден - падаем с ошибкой
-                raise ValueError(
-                    f"Файл '{file_name}' не содержит заголовка и 'column_mapping' не указан в конфиге. "
-                    f"Невозможно определить структуру данных."
-                )
-
             # 3. Блок обработки datetime
-#            datetime_col = None
-#            if 'Date' in df.columns and 'Time' in df.columns:
-#                self.log.info("Обнаружены колонки 'Date' и 'Time'. Объединение в DatetimeIndex.")
-#                datetime_col = df['Date'] + ' ' + df['Time']
-#                cols_to_drop = ['Date', 'Time']
-#            elif 'Date' in df.columns:
-#                self.log.info("Обнаружена колонка 'Date'. Преобразование в DatetimeIndex.")
-#                datetime_col = df['Date']
-#                cols_to_drop = ['Date']
-            
             datetime_col_name = "datetime_temp" # Временное имя колонки
             cols_to_drop = []
 
@@ -146,9 +118,9 @@ class FileLoader:
                     raise
             else:
                 self.log.warning("Колонки 'Date'/'Time' не найдены. Данные не будут индексированы по времени.")
-            #
 
             self.log.info(f"Данные успешно загружены. Размер: {df.shape}")
+            ### self.log.info(f"Первые 5 строк обработанных данных из FileLoader:\n{df.head().to_string()}")
             return df
         except Exception as e:
             self.log.error(f"Ошибка при чтении файла '{file_name}': {e}")

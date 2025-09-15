@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+import json
 import joblib
 
 from .app_config import AppConfig
@@ -64,13 +65,13 @@ class DataPreparer:
         file_name = f"{experiment_cfg.asset_name}.csv" 
         df = self.file_loader.read_csv(file_name, experiment_cfg=experiment_cfg)
 
-        # --- Диагностика: Проверяем NaN после загрузки ---
-        initial_nan_count = df.isna().sum().sum()
-        if initial_nan_count > 0:
-            self.log.warning(f"В исходных данных после загрузки обнаружено {initial_nan_count} NaN.")
-        else:
-            self.log.info("Проверка исходных данных: NaN не обнаружены.")
-        # --- Конец Диагностики ---
+        ### # --- Диагностика: Проверяем NaN после загрузки ---
+        ### initial_nan_count = df.isna().sum().sum()
+        ### if initial_nan_count > 0:
+        ###     self.log.warning(f"В исходных данных после загрузки обнаружено {initial_nan_count} NaN.")
+        ### else:
+        ###     self.log.info("Проверка исходных данных: NaN не обнаружены.")
+        ### # --- Конец Диагностики ---
 
         # 3. Обогащение признаками (Feature Engineering)
         df_with_features = self.feature_engineer.run(df, experiment_cfg)
@@ -92,7 +93,27 @@ class DataPreparer:
             self.log.error(f"Ошибка при сохранении скейлера: {e}")
             raise
 
-        # 8. Сохранение выборок
+        # 8. Сохраняем метаданные (имена колонок)
+        metadata = {
+            'columns': train_df.columns.tolist(),
+            'target_columns': self.data_splitter._get_target_columns(experiment_cfg)
+        }
+        metadata_path = cache_path.with_suffix('.json')
+        try:
+            with open(metadata_path, 'w') as f:
+                json.dump(metadata, f, indent=4)
+            self.log.info(f"Метаданные успешно сохранены в '{metadata_path.name}'")
+        except Exception as e:
+            self.log.error(f"Ошибка при сохранении метаданных: {e}")
+            raise
+
+        ### # Диагностика перед сохранением выборок
+        ### self.log.info(f"--- ДИАГНОСТИКА: Данные перед сохранением выборок (Train) ---")
+        ### train_df.info()
+        ### self.log.info(f"Первые 5 строк:\n{train_df.head().to_string()}")
+        ### # --- Конец диагностики ---
+
+        # 9. Сохранение выборок
         self.data_saver.save(file_path=cache_path, train=train_df, validation=val_df, test=test_df)
         
         self.log.info("Процесс предобработки данных завершен.")

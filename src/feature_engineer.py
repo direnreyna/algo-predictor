@@ -57,9 +57,9 @@ class FeatureEngineer:
                 
                 for indicator_str in standard_indicators:
                     try:
-                        # --- Диагностический блок 1 ---
-                        before_nan_count = df_copy.isna().sum().sum()
-                        # --- Конец блока ---
+                        ### # --- Диагностический блок 1 ---
+                        ### before_nan_count = df_copy.isna().sum().sum()
+                        ### # --- Конец блока ---
 
                         # --- Устойчивый блок с проверкой ---
                         cols_before = set(df_copy.columns)
@@ -95,11 +95,11 @@ class FeatureEngineer:
                                 df_copy.drop(columns=sanitized_new_cols, inplace=True)
                         # --- Конец блока ---
 
-                        # --- Диагностический блок 2 ---
-                        after_nan_count = df_copy.isna().sum().sum()
-                        new_nans = after_nan_count - before_nan_count
-                        self.log.info(f"  -> {indicator_str}: добавлено {new_nans} NaN.")
-                        # --- Конец блока ---
+                        ### # --- Диагностический блок 2 ---
+                        ### after_nan_count = df_copy.isna().sum().sum()
+                        ### new_nans = after_nan_count - before_nan_count
+                        ### self.log.info(f"  -> {indicator_str}: добавлено {new_nans} NaN.")
+                        ### # --- Конец блока ---
 
                     except Exception as e:
                         self.log.error(f"Ошибка при расчете индикатора '{indicator_str}': {e}")
@@ -113,16 +113,10 @@ class FeatureEngineer:
                 method_to_call = getattr(self, f"_calculate_{name}")
                 df_copy = method_to_call(df_copy)
 
-        # --- Диагностика: Состояние NaN перед финальной очисткой ---
-        self.log.info(f"Состояние NaN перед финальной очисткой (Total={df_copy.isna().sum().sum()}):\n{df_copy.isna().sum()}")
-        # --- Конец Диагностики ---
+        ### # --- Диагностика: Состояние NaN перед финальной очисткой ---
+        ### self.log.info(f"Состояние NaN перед финальной очисткой (Total={df_copy.isna().sum().sum()}):\n{df_copy.isna().sum()}")
+        ### # --- Конец Диагностики ---
 
-        ### # 5. Очистка от NaN
-        ### initial_rows = len(df_copy)
-        ### df_copy.dropna(inplace=True)
-        ### final_rows = len(df_copy)
-        ### self.log.info(f"Очистка от NaN: удалено {initial_rows - final_rows} строк.")
-        
         # 5. Финальная очистка: заполнение и отсечение периода прогрева ##ДОБАВЛЕН БЛОК
         # 5.1 Заполняем пропуски в середине данных (от выходных и т.д.)
         initial_nan_count = df_copy.isna().sum().sum()

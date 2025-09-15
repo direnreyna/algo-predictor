@@ -1,0 +1,64 @@
+# configs/lgbm_search.yaml
+
+# Имя эксперимента для MLflow
+experiment_name: "Default LGBM Search"
+
+# --- "Замороженные" параметры ---
+asset_name: "EURUSD_D"
+model_type: "lightgbm"
+task_type: "regression"
+
+# Карта для файла без заголовка
+column_mapping:
+  0: "Date"
+  1: "Time"
+  2: "Open"
+  3: "High"
+  4: "Low"
+  5: "Close"
+  6: "Volume"
+
+# --- Секция для дообучения
+finetune_from_run:
+  # Оставьте "run_id" пустым (или null) для режима поиска/первого обучения
+  # Заполните "run_id" значением Run ID () лучшего run'а модели из MLflow
+  run_id: null
+
+# --- Управление логированием (отключаем для режима поиска/включаем для режима (до)обучения) ---
+log_history_per_epoch: false
+
+# Параметры модели, взятые из лучшего trial
+model_params: {}
+
+# Параметры обучения (для режима хардмод)
+train_params: {}
+
+# --- Секция для перебора Optuna ---
+# (не используется при заполненном "finetune_from_run.run_id") ---
+search_space:
+  feature_set_name:
+    type: categorical
+    choices: ["base_indicators", "ohlcv_with_rsi"]
+
+  labeling_horizon:
+    type: int
+    low: 5
+    high: 20
+
+  # Параметры LightGBM, которые относятся и к архитектуре, и к обучению
+  # Для простоты оставляем их в одной группе
+  n_estimators:
+    type: int
+    low: 50
+    high: 250
+
+  learning_rate:
+    type: float
+    low: 0.01
+    high: 0.2
+    log: true
+
+  num_leaves:
+    type: int
+    low: 20
+    high: 50

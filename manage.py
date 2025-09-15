@@ -22,7 +22,8 @@ def main():
 
     # Команда 'search' для поиска
     parser_search = subparsers.add_parser("search", help="Запустить поиск моделей на основе конфигурации.")
-    parser_search.add_argument("--config", type=str, required=True, help="Путь к YAML-файлу с пространством поиска.")
+    #parser_search.add_argument("--config", type=str, required=True, help="Путь к YAML-файлу с пространством поиска.")
+    parser_search.add_argument("--config", type=str, help="Путь к YAML-файлу с пространством поиска. Если не указан, используется путь по умолчанию из AppConfig: self.DEFAULT_SEARCH_CONFIG_PATH.")
     parser_search.add_argument("--n-trials", type=int, default=1, help="Количество итераций поиска.")
 
     # Команда 'ui' для MLflow
@@ -36,7 +37,12 @@ def main():
         from main_search import SearchOrchestrator
         from src.config_loader import ConfigLoader
 
-        config_path = Path(args.config)
+        cfg = AppConfig()
+        
+        # Выбираем путь конфига для задания пайплайна обучения модели:
+        # по-умолчанию: args.config - заданный параметром в CLI
+        # если его нет, то из cfg.DEFAULT_SEARCH_CONFIG_PATH
+        config_path = Path(args.config) if args.config else cfg.DEFAULT_SEARCH_CONFIG_PATH
         base_config = ConfigLoader.load_from_yaml(config_path)
         
         # Устанавливаем имя эксперимента в MLflow

@@ -16,7 +16,8 @@ def find_project_root(marker_file=".project-root"):
 PROJECT_ROOT = find_project_root()
 LOCAL_ROOT = Path(__file__).resolve().parent.parent
 MLFLOW_RUNS_PATH = LOCAL_ROOT / "mlruns"
-MLFLOW_TRACKING_URI = f"file:///{MLFLOW_RUNS_PATH.as_posix()}" # .as_posix() для кросс-платформенности
+# MLFLOW_TRACKING_URI = f"file:///{MLFLOW_RUNS_PATH.as_posix()}" # .as_posix() для кросс-платформенности
+MLFLOW_TRACKING_URI = MLFLOW_RUNS_PATH.as_uri()
 
 class AppConfig:
     """
@@ -42,6 +43,9 @@ class AppConfig:
         self.DATA_DIR = LOCAL_ROOT / "data"
         self.MODELS_DIR = LOCAL_ROOT / "models"
         self.LOGS_DIR = LOCAL_ROOT / "logs"
+
+        # Путь к конфигурационному файлу для поиска по умолчанию
+        self.DEFAULT_SEARCH_CONFIG_PATH = LOCAL_ROOT / "configs" / "lgbm_search.yaml"
 
         ########## ПАРАМЕТРЫ ЗАДАЧИ ##########
         self.TASK_TYPE = "classification" # Варианты: "classification", "regression"
@@ -131,6 +135,7 @@ class AppConfig:
 
         ########## ПАРАМЕТРЫ МОДЕЛИ ##########
         self.X_LEN = 60
+        self.BATCH_SIZE = 32
 
         # ВЫПОЛНЯЕМ СОЗДАНИЕ ПАПОК ОДИН РАЗ ПРИ ИМПОРТЕ МОДУЛЯ
         self._setup_directories()

@@ -1,0 +1,69 @@
+# configs/lstm_search.yaml
+
+# Имя эксперимента для MLflow
+experiment_name: "Default LSTM Search"
+
+# --- "Замороженные" параметры ---
+asset_name: "EURUSD_D"
+model_type: "lstm"
+task_type: "regression"
+
+# Карта для файла без заголовка (остается та же)
+column_mapping:
+  0: "Date"
+  1: "Time"
+  2: "Open"
+  3: "High"
+  4: "Low"
+  5: "Close"
+  6: "Volume"
+
+# --- Секция для дообучения
+finetune_from_run:
+  # Оставьте "run_id" пустым (или null) для режима поиска/первого обучения
+  # Заполните "run_id" значением Run ID () лучшего run'а модели из MLflow
+  run_id: null
+
+# --- Управление логированием (отключаем для режима поиска/включаем для режима (до)обучения) ---
+log_history_per_epoch: false
+
+
+# Параметры модели (для режима хардмод)
+model_params: {}
+
+# Параметры обучения (для режима хардмод)
+train_params: {}
+
+# --- Секция для перебора Optuna ---
+# (не используется при заполненном "finetune_from_run.run_id") ---
+search_space:
+  # 1. Параметры данных
+  feature_set_name:
+    type: categorical
+    choices: ["base_indicators", "ohlcv_with_rsi"]
+
+  labeling_horizon:
+    type: int
+    low: 5
+    high: 20
+
+  # 2. Параметры модели и обучения
+  epochs:
+    type: categorical # Для начала зафиксируем, чтобы не ждать долго
+    choices: [50]
+    
+  lstm_units:
+    type: int
+    low: 32
+    high: 128
+  
+  dropout_rate:
+    type: float
+    low: 0.1
+    high: 0.5
+    
+  learning_rate:
+    type: float
+    low: 0.0001
+    high: 0.01
+    log: true
