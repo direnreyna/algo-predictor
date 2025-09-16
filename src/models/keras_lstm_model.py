@@ -14,7 +14,7 @@ class LoggingCallback(tf.keras.callbacks.Callback):
         self.log = AppLogger()
 
     def on_epoch_end(self, epoch, logs=None):
-        msg = f"Эпоха {epoch+1:03d} | "
+        msg = f"Эпоха {epoch + 1} | "
         if logs:
             msg += " | ".join([f"{k}: {v:.4f}" for k, v in logs.items()])
         self.log.info(msg)

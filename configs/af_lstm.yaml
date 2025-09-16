@@ -1,0 +1,68 @@
+# configs/af_lstm.yaml
+
+# Имя эксперимента для MLflow
+experiment_name: "Af LSTM EURUSD"
+
+# --- "Замороженные" параметры ---
+asset_name: "EURUSD_D"
+model_type: "af_lstm"       # Указываем фабрике, что нужна Keras/LSTM модель
+task_type: "regression"
+
+# Карта для файла без заголовка
+column_mapping:
+  0: "Date"
+  1: "Time"
+  2: "Open"
+  3: "High"
+  4: "Low"
+  5: "Close"
+  6: "Volume"
+
+# --- Секция для дообучения ---
+finetune_from_run:
+  run_id: null
+
+# --- Управление логированием ---
+log_history_per_epoch: false
+
+# --- Параметры для фиксированного запуска (хардмод) ---
+model_params: {}
+train_params: {}
+
+# --- Секция для перебора Optuna ---
+search_space:
+  # Параметры предобработки
+  feature_set_name:
+    type: categorical
+    choices: ["base_indicators", "ohlcv_with_rsi"]
+  
+  labeling_horizon:
+    type: int
+    low: 5
+    high: 15
+
+  # Вложенные параметры для архитектуры и обучения модели
+  lstm_units_1:       # Количество нейронов в 1-м LSTM слое
+    type: int
+    low: 32
+    high: 128
+    
+  lstm_units_2:       # Количество нейронов во 2-м LSTM слое
+    type: int
+    low: 16
+    high: 64
+
+  dropout_rate:       # Процент "выключения" нейронов для борьбы с переобучением
+    type: float
+    low: 0.1
+    high: 0.5
+    
+  learning_rate:
+    type: float
+    low: 0.0001
+    high: 0.01
+    log: true
+
+  epochs:
+    type: categorical
+    choices: [50]

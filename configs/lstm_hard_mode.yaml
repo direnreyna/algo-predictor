@@ -8,7 +8,7 @@ asset_name: "EURUSD_D"
 model_type: "lstm"
 task_type: "regression"
 feature_set_name: "base_indicators"
-labeling_horizon: 14
+labeling_horizon: 20
 
 # Карта колонок
 column_mapping:
@@ -31,12 +31,12 @@ log_history_per_epoch: true
 
 # Параметры модели, взятые из лучшего trial
 model_params:
-  lstm_units: 102
-  dropout_rate: 0.491490012836181
+  lstm_units: 83
+  dropout_rate: 0.26706022765276477
 
 train_params:
   epochs: 200
-  learning_rate: 0.00026314286878353633
+  learning_rate: 0.004218676180451373
   early_stopping_patience: 20
   early_stopping_monitor: 'val_loss'
 

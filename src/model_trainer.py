@@ -107,6 +107,7 @@ class ModelTrainer:
         # 4. Обучение модели (делегирование объекту модели)
         self.log.info("Начало обучения модели...")
         history = model_object.train(data_dict) # Передаем весь словарь
+        history = model_object.train(data_dict, train_params=experiment_cfg.train_params) # Передаем весь словарь 
         self.log.info("Обучение модели завершено.")
 
         # 5. Оценка модели
@@ -159,8 +160,13 @@ class ModelTrainer:
         else:
             self.log.warning("Нет активного MLflow run. Артефакты не будут залогированы.")
 
-        self.log.info(f"Оценка модели завершена. Ключевая метрика (mse/accuracy): {list(ml_metrics.values())[0]:.4f}")
-       
+        # Определяем имя ключевой метрики и выводим его
+        ### self.log.info(f"Оценка модели завершена. Ключевая метрика (mse/accuracy): {list(ml_metrics.values())[0]:.4f}")
+        key_metric_name = "mse" if experiment_cfg.task_type == "regression" else "accuracy"
+        key_metric_value = ml_metrics.get(key_metric_name, 0.0)
+        self.log.info(f"Оценка модели завершена. Ключевая метрика ({key_metric_name}): {key_metric_value:.4f}")
+
+
         # 7. Подготовка тестовых данных для бэктестера
         # Нам нужен исходный, но уже масштабированный DataFrame `test`,
         # а не нарезанный на окна X_test/y_test.

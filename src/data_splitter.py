@@ -17,18 +17,33 @@ class DataSplitter:
         self.log = log
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
-    def run(self, df:pd.DataFrame, experiment_cfg: ExperimentConfig) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, StandardScaler]: ##ДОБАВЛЕН БЛОК METHOD
+    ###def run(self, df:pd.DataFrame, experiment_cfg: ExperimentConfig) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, StandardScaler]:
+    ###    """
+    ###    Разделяет данные и, опционально, масштабирует их.
+    ###
+    ###    Args:
+    ###        df (pd.DataFrame): Полный DataFrame. MESSAGE: The user has run the code with differentiation disabled, but the `KeyError: '
+    ###        experiment_cfg (ExperimentConfig): Конфигурация эксперимента.
+    ###        scale_data (bool): Если True, выполняет масштабирование.
+    ###
+    ###    Returns:
+    ###        Кортеж из (train_df, val_df, test_df, scalerX_val'` persists. The log clearly shows `WARNING - Выборка 'validation' слишком мала для нарез | None).
+    ###    """
+    ###    train_df, val_df, test_df = self.split(df)
+    ###    return self.scale(train_df, val_df, test_df, experiment_cfg)
+
+    def split(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
-        Разделяет и масштабирует данные на train, validation и test.
+        Выполняет только хронологическое разделение данных.
 
-        :param df: Полный DataFrame с признаками и метками.
-        :return: Кортеж из четырех элементов: (train_df, val_df, test_df, scaler).
+        Args:
+            df (pd.DataFrame): Полный DataFrame для разделения.
+
+        Returns:
+            Кортеж из трех DataFrame: (train_df, val_df, test_df).
         """
+        self.log.info("Начинаем хронологическое разделение датасета...")
 
-        self.log.info("Начинаем разделение и нормирование датасета...")
-
-        # 1. Хронологическое разделение с разрывами (gaps)
-        # Убедимся, что данных достаточно для разделения
         if len(df) < self.cfg.TEST_SIZE + self.cfg.VAL_SIZE + 2 * self.cfg.GAP_SIZE:
             raise ValueError("Недостаточно данных для выполнения разделения с заданными параметрами.")
 
@@ -41,36 +56,56 @@ class DataSplitter:
         train_end_idx = val_start_idx - self.cfg.GAP_SIZE
         train_df = df.iloc[:train_end_idx].copy()
         
-        self.log.info(f"Размеры выборок: Train={train_df.shape}, Validation={val_df.shape}, Test={test_df.shape}")
+        self.log.info(f"Размеры выборок после разделения: Train={train_df.shape}, Validation={val_df.shape}, Test={test_df.shape}")
+        return train_df, val_df, test_df
 
-        # 2. Определение признаков для масштабирования (все, кроме целевых)
-        target_cols = self._get_target_columns(experiment_cfg)
+    def scale(self, train_df: pd.DataFrame, val_df: pd.DataFrame, test_df: pd.DataFrame, experiment_cfg: ExperimentConfig) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, StandardScaler | None]:
+        """Масштабирует переданные DataFrame с помощью StandardScaler."""
+        self.log.info("Начинаем масштабирование признаков...")
 
-        # Выбираем только числовые колонки для масштабирования, исключая целевые
-        numeric_cols = train_df.select_dtypes(include=np.number).columns.tolist()
-        feature_cols = [col for col in numeric_cols if col not in target_cols]
+        ### target_cols = self._get_target_columns(experiment_cfg)
+        ### numeric_cols = train_df.select_dtypes(include=np.number).columns.tolist()
+        ### feature_cols = [col for col in numeric_cols if col not in target_cols]
         
-        self.log.info(f"Количество признаков для масштабирования: {len(feature_cols)}")
+        # Выбираем ВСЕ числовые колонки для обучения скейлера и масштабирования
+        cols_to_scale = train_df.select_dtypes(include=np.number).columns.tolist()
+        
+        if not cols_to_scale:
+            self.log.warning("Не найдено числовых колонок для масштабирования. Пропускаем шаг.")
+            return train_df, val_df, test_df, None
 
-        # 3. Обучение скейлера ТОЛЬКО на train выборке
+        self.log.info(f"Количество колонок для масштабирования: {len(cols_to_scale)}")
+
         scaler = StandardScaler()
 
-        # Явно приводим типы к float64 перед масштабированием, чтобы избежать FutureWarning
-        train_df[feature_cols] = train_df[feature_cols].astype(np.float64)
-        val_df[feature_cols] = val_df[feature_cols].astype(np.float64)
-        test_df[feature_cols] = test_df[feature_cols].astype(np.float64)
+        train_df_scaled = train_df.copy()
+        val_df_scaled = val_df.copy()
+        test_df_scaled = test_df.copy()
+        
+        # Приводим типы к float64
+        train_df_scaled[cols_to_scale] = train_df_scaled[cols_to_scale].astype(np.float64)
+        val_df_scaled[cols_to_scale] = val_df_scaled[cols_to_scale].astype(np.float64)
+        test_df_scaled[cols_to_scale] = test_df_scaled[cols_to_scale].astype(np.float64)
 
-        scaler.fit(train_df[feature_cols])
+        ### train_df_scaled[feature_cols] = train_df_scaled[feature_cols].astype(np.float64)
+        ### val_df_scaled[feature_cols] = val_df_scaled[feature_cols].astype(np.float64)
+        ### test_df_scaled[feature_cols] = test_df_scaled[feature_cols].astype(np.float64)
+        
+        # Обучаем скейлер на ВСЕХ числовых колонках из train
+        scaler.fit(train_df_scaled[cols_to_scale])
+        ### scaler.fit(train_df_scaled[feature_cols])
 
-        # 4. Применение скейлера ко всем выборкам
-        # Используем .loc для присвоения, чтобы избежать SettingWithCopyWarning
-        train_df.loc[:, feature_cols] = scaler.transform(train_df[feature_cols])
-        val_df.loc[:, feature_cols] = scaler.transform(val_df[feature_cols])
-        test_df.loc[:, feature_cols] = scaler.transform(test_df[feature_cols])
+        # Применяем скейлер ко всем выборкам
+        train_df_scaled.loc[:, cols_to_scale] = scaler.transform(train_df_scaled[cols_to_scale])
+        val_df_scaled.loc[:, cols_to_scale] = scaler.transform(val_df_scaled[cols_to_scale])
+        test_df_scaled.loc[:, cols_to_scale] = scaler.transform(test_df_scaled[cols_to_scale])
+
+        ### train_df_scaled.loc[:, feature_cols] = scaler.transform(train_df_scaled[feature_cols])
+        ### val_df_scaled.loc[:, feature_cols] = scaler.transform(val_df_scaled[feature_cols])
+        ### test_df_scaled.loc[:, feature_cols] = scaler.transform(test_df_scaled[feature_cols])
 
         self.log.info("Масштабирование признаков завершено.")
-        
-        return train_df, val_df, test_df, scaler
+        return train_df_scaled, val_df_scaled, test_df_scaled, scaler
 
     def _get_target_columns(self, experiment_cfg: ExperimentConfig) -> List[str]:
         """Определяет имена целевых столбцов на основе типа задачи."""

@@ -1,5 +1,6 @@
 # src.feature_engineer.py
 
+import numpy as np
 import pandas as pd
 import pandas_ta as ta
 from .app_config import AppConfig
@@ -14,7 +15,6 @@ class FeatureEngineer:
         self.cfg = cfg
         self.log = log
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
-
 
     def run(self, df: pd.DataFrame, experiment_cfg: ExperimentConfig) -> pd.DataFrame:
         """
@@ -35,6 +35,13 @@ class FeatureEngineer:
 
         df_copy = df.copy()
 
+        # Блок обработки DATETIME признаков
+        datetime_feature_names = self.cfg.FEATURE_SETS.get("datetime_features", [])
+        requested_dt_features = [f for f in feature_list if f in datetime_feature_names]
+        if requested_dt_features:
+            self.log.info(f"Расчет {len(requested_dt_features)} временных признаков...")
+            self._calculate_datetime_features(df_copy)
+
         # 2. Разделяем на стандартные и кастомные
         standard_indicators = []
         custom_indicators = []
@@ -43,6 +50,7 @@ class FeatureEngineer:
         
         for name in feature_list:
             if name in ohlcv: continue # Пропускаем базовые OHLCV колонки
+            if name in datetime_feature_names: continue
 
             # Проверяем. существует ли аттрибут (метод) с указанным именем в текущем классе (это кастомный метод)
             if hasattr(self, f"_calculate_{name}"):
@@ -173,3 +181,47 @@ class FeatureEngineer:
         """
         df['custom_test_indicator'] = (df['Open'] + df['High'] + df['Low'] + df['Close']) / 4
         return df
+    
+    def _calculate_datetime_features(self, df: pd.DataFrame) -> None:
+        """
+        Рассчитывает и добавляет в DataFrame циклические признаки времени и год.
+        Модифицирует DataFrame на месте (inplace).
+
+        Args:
+            df (pd.DataFrame): DataFrame с DatetimeIndex.
+        """
+
+        # Убедимся, что индекс имеет тип DatetimeIndex
+        if not isinstance(df.index, pd.DatetimeIndex):
+            self.log.warning("DataFrame не имеет DatetimeIndex. Признаки времени не будут рассчитаны.")
+            return
+        
+        # День года (с учетом високосных лет)
+        day_of_year = df.index.dayofyear
+        days_in_year = np.where(df.index.is_leap_year, 366, 365)
+        df['day_of_year_sin'] = np.sin(2 * np.pi * day_of_year / days_in_year)
+        df['day_of_year_cos'] = np.cos(2 * np.pi * day_of_year / days_in_year)
+
+        # День недели
+        day_of_week = df.index.dayofweek # Понедельник=0, Воскресенье=6
+        df['day_of_week_sin'] = np.sin(2 * np.pi * day_of_week / 7)
+        df['day_of_week_cos'] = np.cos(2 * np.pi * day_of_week / 7)
+        
+        # Месяц
+        month = df.index.month
+        df['month_sin'] = np.sin(2 * np.pi * (month - 1) / 12)
+        df['month_cos'] = np.cos(2 * np.pi * (month - 1) / 12)
+        
+        # Год (как линейный тренд)
+        df['year'] = df.index.year
+        
+        # День месяца (с учетом реального количества дней в месяце)
+        day = df.index.day
+        days_in_month = df.index.days_in_month
+        df['day_sin'] = np.sin(2 * np.pi * (day - 1) / days_in_month)
+        df['day_cos'] = np.cos(2 * np.pi * (day - 1) / days_in_month)
+
+        # Квартал года
+        quarter = df.index.quarter
+        df['quarter_sin'] = np.sin(2 * np.pi * (quarter - 1) / 4)
+        df['quarter_cos'] = np.cos(2 * np.pi * (quarter - 1) / 4)

@@ -33,12 +33,18 @@ class Backtester:
         # Создаем копию, чтобы избежать SettingWithCopyWarning
         unscaled_test_df = test_df.copy()
         
-        # Определяем колонки, которые были масштабированы (все кроме целевых)
-        feature_cols = [col for col in unscaled_test_df.columns if not col.startswith('target_')]
+        ### # Определяем колонки, которые были масштабированы (все кроме целевых)
+        ### feature_cols = [col for col in unscaled_test_df.columns if not col.startswith('target_')]
+             
+        # Определяем ВСЕ числовые колонки, которые были масштабированы
+        cols_to_unscale = unscaled_test_df.select_dtypes(include=np.number).columns.tolist()
+   
+        ### # Применяем обратное преобразование
+        ### unscaled_test_df[feature_cols] = scaler.inverse_transform(unscaled_test_df[feature_cols])
         
         # Применяем обратное преобразование
-        unscaled_test_df[feature_cols] = scaler.inverse_transform(unscaled_test_df[feature_cols])
-        
+        unscaled_test_df[cols_to_unscale] = scaler.inverse_transform(unscaled_test_df[cols_to_unscale])
+
         # Извлекаем цены закрытия. Они нужны для vbt.Portfolio.
         # test_df индексирован по дате, поэтому close_prices будет правильной временной серией.
         close_prices = unscaled_test_df['Close']

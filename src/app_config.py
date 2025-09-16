@@ -77,6 +77,7 @@ class AppConfig:
         _feature_sets = {
             # Базовые "строительные блоки"
             "ohlcv": ['Open', 'High', 'Low', 'Close', 'Volume'],
+            "datetime_features": ["day_of_year_sin", "day_of_year_cos", "day_of_week_sin", "day_of_week_cos", "month_sin", "month_cos", "year", "day_sin", "day_cos", "quarter_sin", "quarter_cos"],
             "momentum_indicators": ['rsi_14', 'stoch_14_3_3'],
             "volatility_indicators": ['bbands_20_2.0', 'atr_14'],
             "trend_indicators": ['macd_12_26_9'],
@@ -105,9 +106,9 @@ class AppConfig:
 
             # Комбинированные наборы, использующие базовые и кастомные
             "base_indicators": [
-                "ohlcv", "momentum_indicators", "trend_indicators", "volatility_indicators", "volume_indicators", "custom_indicators"
+                "ohlcv", "datetime_features", "momentum_indicators", "trend_indicators", "volatility_indicators", "volume_indicators", "custom_indicators"
             ],
-            "ohlcv_with_rsi": ["ohlcv", "momentum_indicators"]
+            "ohlcv_with_rsi": ["ohlcv", "datetime_features", "momentum_indicators"]
         }
 
         # "Собираем" финальный словарь FEATURE_SETS, раскрывая ссылки

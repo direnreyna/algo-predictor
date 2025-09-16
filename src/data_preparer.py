@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 import json
 import joblib
+import mlflow
 
 from .app_config import AppConfig
 from .app_logger import AppLogger
@@ -13,6 +14,7 @@ from .data_labeler import DataLabeler
 from .data_saver import DataSaver
 from .entities import ExperimentConfig
 from .file_loader import FileLoader
+from .statistical_analyzer import StatisticalAnalyzer
 from .cache_utils import get_cache_filename
 
 class DataPreparer:
@@ -40,6 +42,7 @@ class DataPreparer:
         self.data_labeler = DataLabeler(cfg, log)
         self.data_splitter = DataSplitter(cfg, log)
         self.data_saver = DataSaver(cfg, log)
+        self.statistical_analyzer = StatisticalAnalyzer(cfg, log)
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
     def run(self, experiment_cfg: ExperimentConfig) -> None:
@@ -65,6 +68,11 @@ class DataPreparer:
         file_name = f"{experiment_cfg.asset_name}.csv" 
         df = self.file_loader.read_csv(file_name, experiment_cfg=experiment_cfg)
 
+        # Фаза 1: Статистический анализ
+        global_insights = self.statistical_analyzer.analyze(df)
+        if mlflow.active_run():
+            mlflow.log_params(global_insights)
+
         ### # --- Диагностика: Проверяем NaN после загрузки ---
         ### initial_nan_count = df.isna().sum().sum()
         ### if initial_nan_count > 0:
@@ -81,10 +89,42 @@ class DataPreparer:
         # 5. Создание целевой переменной
         df_labeled = self.data_labeler.run(df_with_features, experiment_cfg)
         
-        # 6. Разделение на выборки и Нормализаци
-        train_df, val_df, test_df, scaler = self.data_splitter.run(df_labeled, experiment_cfg)
+        ### # --- Диагностика: Проверяем DataFrame ПОСЛЕ Feature Engineering и Labeling ---
+        self.log.info(f"--- ДИАГНОСТИКА: DataFrame ПОСЛЕ Feature Engineering и Labeling ---")
+        self.log.info(f"Shape: {df_labeled.shape}\n{df_labeled.head().to_string()}")
+        ### # --- Конец Диагностики ---
 
-        # 7. Сохранение скейлера
+        # 6. Разделение на выборки (ДО трансформаций и масштабирования)
+        train_df, val_df, test_df = self.data_splitter.split(df_labeled)
+        
+        # 7. Фаза 2: Статистическая трансформация (ДО масштабирования)
+        self.log.info("Запуск фазы 2: Статистическая трансформация данных...")
+        self.statistical_analyzer.fit(train_df, global_insights)
+        train_df = self.statistical_analyzer.transform(train_df, global_insights)
+        val_df = self.statistical_analyzer.transform(val_df, global_insights)
+        test_df = self.statistical_analyzer.transform(test_df, global_insights)
+        self.log.info("Статистическая трансформация завершена.")
+
+        ### # --- Диагностика: Проверяем Train DataFrame ПОСЛЕ статистической трансформации
+        self.log.info(f"--- ДИАГНОСТИКА: Train DataFrame ПОСЛЕ статистической трансформации ---")
+        self.log.info(f"Shape: {train_df.shape}\n{train_df.head().to_string()}")
+        self.log.info(f"Статистика (describe):\n{train_df.describe().to_string()}")
+        ### # --- Конец Диагностики ---
+
+        # 8. Масштабирование (ПОСЛЕ трансформаций)
+        self.log.info("Масштабирование трансформированных данных...")
+        train_df, val_df, test_df, scaler = self.data_splitter.scale(
+            train_df, val_df, test_df, experiment_cfg
+        )
+        self.log.info("Масштабирование завершено.")
+        
+        ### # --- Диагностика: Проверяем Train DataFrame ПОСЛЕ масштабирования
+        self.log.info(f"--- ДИАГНОСТИКА: Train DataFrame ПОСЛЕ масштабирования ---")
+        self.log.info(f"Shape: {train_df.shape}\n{train_df.head().to_string()}")
+        self.log.info(f"Статистика (describe):\n{train_df.describe().to_string()}")
+        ### # --- Конец Диагностики ---
+
+        # 9. Сохранение скейлера
         scaler_path = cache_path.with_suffix('.joblib')
         try:
             joblib.dump(scaler, scaler_path)
@@ -93,7 +133,7 @@ class DataPreparer:
             self.log.error(f"Ошибка при сохранении скейлера: {e}")
             raise
 
-        # 8. Сохраняем метаданные (имена колонок)
+        # 10. Сохраняем метаданные (имена колонок)
         metadata = {
             'columns': train_df.columns.tolist(),
             'target_columns': self.data_splitter._get_target_columns(experiment_cfg)
@@ -113,7 +153,7 @@ class DataPreparer:
         ### self.log.info(f"Первые 5 строк:\n{train_df.head().to_string()}")
         ### # --- Конец диагностики ---
 
-        # 9. Сохранение выборок
+        # 11. Сохранение выборок
         self.data_saver.save(file_path=cache_path, train=train_df, validation=val_df, test=test_df)
         
         self.log.info("Процесс предобработки данных завершен.")
