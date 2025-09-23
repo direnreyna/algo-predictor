@@ -2,7 +2,6 @@
 
 import yaml
 from pathlib import Path
-from .entities import ExperimentConfig
 
 class ConfigLoader:
     """
@@ -20,9 +19,9 @@ class ConfigLoader:
         
         return base_config
 
-    @staticmethod
-    def create_experiment_config(base_config: dict) -> ExperimentConfig:
-        """Создает экземпляр ExperimentConfig из 'статичной' части конфига."""
-        # Убираем секцию search_space, так как она не является частью паспорта
-        static_params = {k: v for k, v in base_config.items() if k != 'search_space'}
-        return ExperimentConfig(**static_params)
+    ### @staticmethod
+    ### def create_experiment_config(base_config: dict) -> ExperimentConfig:
+    ###     """Создает экземпляр ExperimentConfig из 'статичной' части конфига."""
+    ###     # Убираем секцию search_space, так как она не является частью паспорта
+    ###     static_params = {k: v for k, v in base_config.items() if k != 'search_space'}
+    ###     return ExperimentConfig(**static_params)

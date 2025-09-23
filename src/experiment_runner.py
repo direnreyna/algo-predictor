@@ -32,7 +32,7 @@ class ExperimentRunner:
 
         self.log.info(f"Класс {self.__class__.__name__} инициализирован для эксперимента.")
 
-    def run(self, warm_start: dict | None = None, log_history_per_epoch: bool = False) -> Tuple[dict, dict]:
+    def run(self, warm_start: dict | None = None) -> Tuple[dict, dict]:
         """
         Запускает полный пайплайн для одного эксперимента.
 
@@ -42,7 +42,8 @@ class ExperimentRunner:
 
         :return: Кортеж из двух словарей: (финансовые_метрики, мл_метрики).
         """
-        self.log.info(f"--- Запуск эксперимента с конфигом: {self.experiment_cfg.asset_name} | {self.experiment_cfg.feature_set_name} ---")
+        common_params = self.experiment_cfg.common_params
+        self.log.info(f"--- Запуск эксперимента с конфигом: {common_params.get('asset_name')} | {common_params.get('feature_set_name')} ---")
         
         # 1: Подготовка данных. DataPreparer сам все загрузит и обработает.
         # Этот метод должен будет вернуть пути к кеш-файлам или сами данные.
@@ -53,7 +54,7 @@ class ExperimentRunner:
         trainer_results = self.model_trainer.run(
             experiment_cfg=self.experiment_cfg,
             warm_start=warm_start,
-            log_history_per_epoch=log_history_per_epoch
+            log_history_per_epoch=self.experiment_cfg.log_history_per_epoch
             )
         ml_metrics = trainer_results["ml_metrics"]
         
@@ -65,7 +66,6 @@ class ExperimentRunner:
             test_df=trainer_results["test_df"],
             scaler=trainer_results["scaler"]
         )
-        ### financial_metrics = self.backtester.run(experiment_cfg=self.experiment_cfg)
 
         self.log.info("--- Эксперимент успешно завершен ---")
         return financial_metrics, ml_metrics

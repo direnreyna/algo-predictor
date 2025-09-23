@@ -10,37 +10,19 @@ class ExperimentConfig:
     frozen=True делает экземпляр неизменяемым после создания, что предотвращает
     случайные ошибки.
     """
-    # 1. Параметры предобработки
-    asset_name: str
-    feature_set_name: str
-    labeling_horizon: int
-    task_type: str
-    
-    # 2. Параметры модели
-    model_type: str
- 
-    # 3. Параметры запуска/оркестрации
-    ### finetune_from_run: dict | None = None
-    log_history_per_epoch: bool = False
-    
-    # Опциональные параметры с дефолтными значениями
-    column_mapping: dict | None = None
-    ### model_params: dict = field(default_factory=dict)
+    # Общие параметры, не зависящие от конкретного trial
+    common_params: dict
+    # Гиперпараметры для конкретного trial
     model_params: dict = field(default_factory=dict)
     train_params: dict = field(default_factory=dict)
-    finetune_from_run: dict | None = None
+    # Параметры, специфичные для запуска
+    log_history_per_epoch: bool = False
 
     def to_dict(self) -> dict[str, Any]:
-        """Преобразует конфиг в словарь для логирования."""
-        params = {
-            "asset_name": self.asset_name,
-            "feature_set_name": self.feature_set_name,
-            "labeling_horizon": self.labeling_horizon,
-            "task_type": self.task_type,
-            "model_type": self.model_type,
-            "finetune_from_run_id": self.finetune_from_run.get("run_id") if self.finetune_from_run else None,
-            "log_history_per_epoch": self.log_history_per_epoch
-        }
+        """Преобразует конфиг в словарь для логирования в MLflow."""
+        # Распаковываем общие параметры и объединяем с остальными
+        params = self.common_params.copy()
         params.update(self.model_params)
         params.update(self.train_params)
+        params["log_history_per_epoch"] = self.log_history_per_epoch
         return params

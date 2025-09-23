@@ -17,19 +17,21 @@ class DataLabeler:
 
     def run(self, df:pd.DataFrame, experiment_cfg: ExperimentConfig) -> pd.DataFrame:
         """
-        Создает столбец 'target' с классами (0, 1, 2)
-        на основе параметров HORIZON и THRESHOLD из конфига.
+        Создает целевые переменные (таргеты) в DataFrame.
+        - Для classification: создает столбец 'target' (0, 1, 2) по методу тройной разметки.
+        - Для regression: создает столбцы 'target_<name>' для каждой колонки,
+          указанной в common_params['targets'], со сдвигом на 1 шаг вперед.
 
         :param df: DataFrame с признаками.
-        :return: DataFrame с добавленным столбцом 'target'.
+        :param experiment_cfg: Конфигурация эксперимента, содержащая common_params.
+        :return: DataFrame с добавленными целевыми столбцами.
         """
-
-        self.log.info(f"Создание целевой переменной для задачи типа '{experiment_cfg.task_type}'...")
+        task_type = experiment_cfg.common_params.get("task_type")
+        self.log.info(f"Создание целевой переменной для задачи типа '{task_type}'...")
         df_copy = df.copy()
 
-        if experiment_cfg.task_type == "classification":
-
-            horizon = experiment_cfg.labeling_horizon
+        if task_type == "classification":
+            horizon = experiment_cfg.common_params.get("labeling_horizon", 5)
             threshold = self.cfg.THRESHOLD
 
             # 1. Расчет будущих изменений цены для каждой точки в пределах горизонта
@@ -68,12 +70,21 @@ class DataLabeler:
             # Можно добавить логику для определения направления на последнем шаге,
             # но классический TBM оставляет это как нейтральный исход.
 
-        elif experiment_cfg.task_type == "regression":
-            self.log.info("Создание целевых переменных для регрессии (прогноз на 1 день).")
-            df_copy['target_high'] = df_copy['High'].shift(-1)
-            df_copy['target_low'] = df_copy['Low'].shift(-1)
+        elif task_type == "regression":
+            targets = experiment_cfg.common_params.get("targets")
+            if not targets or not isinstance(targets, list):
+                raise ValueError("Ключ 'targets' (список колонок) не найден или имеет неверный формат в common_params.")
+            
+            self.log.info(f"Создание целевых переменных для регрессии: {targets}")
+
+            # Динамическое добавление целей
+            for col_name in targets:
+                if col_name not in df_copy.columns:
+                    raise ValueError(f"Исходная колонка '{col_name}' для создания цели не найдена в DataFrame.")
+                # Создаем новую колонку с префиксом 'target_'
+                df_copy[f'target_{col_name}'] = df_copy[col_name].shift(-1)
         else:
-          raise ValueError(f"Неизвестный тип задачи: {experiment_cfg.task_type}")
+          raise ValueError(f"Неизвестный тип задачи: {task_type}")
 
         df_copy.dropna(inplace=True)
         return df_copy

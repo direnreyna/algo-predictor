@@ -50,14 +50,16 @@ class DatasetBuilder:
         """
         if model_type in ['lightgbm', 'catboost']: # Для всех табличных моделей
             return self._build_for_tabular(datasets, target_cols, all_cols)
-        elif model_type in ['lstm', 'tcn', 'transformer']: # Для всех Keras-моделей
+
+        elif model_type in ['lstm', 'af_lstm', 'tcn', 'transformer']: # Для всех Keras-моделей
             return self._build_for_keras(datasets, target_cols, all_cols)
+        ###elif model_type in ['af_lstm']: # Для af-модели
+        ###    return self._build_for_keras(datasets, target_cols, all_cols)
         elif model_type == 'autots':
             return self._build_for_autots(datasets, target_cols, all_cols)
         else:
             raise NotImplementedError(f"Логика построения датасета для типа модели '{model_type}' не реализована.")
 
-        
     def _build_for_autots(self, datasets: dict, target_cols: list[str], all_cols: list[str]) -> dict:
         """
         Готовит данные для AutoTS. Возвращает pandas DataFrame.
@@ -138,18 +140,22 @@ class DatasetBuilder:
                 # Делаем датасет многоразовым для обучения в течение нескольких эпох
                 output[f'{output_key}_dataset'] = dataset.batch(self.cfg.BATCH_SIZE).repeat().prefetch(tf.data.AUTOTUNE)
 
-                # "Плоские" X_test, y_test для финальной оценки - создаем их отдельно
-                ### X_test_flat, y_test_flat = self._create_sequences(data, target_indices)
-                ### output[f'X_{key}'] = X_test_flat
-                ### output[f'y_{key}'] = y_test_flat
-
                 X_flat, y_flat = self._create_sequences(data, target_indices)
                 output[f'X_{output_key}'] = X_flat
                 output[f'y_{output_key}'] = y_flat
 
             else:
                 self.log.warning(f"Выборка '{key}' слишком мала для нарезки на окна. Пропускается.")
-        
+
+        # Рассчитываем правильное количество шагов для датасета на основе реального числа окон
+        if 'train' in datasets and len(datasets['train']) > self.cfg.X_LEN:
+            train_samples = len(datasets['train']) - self.cfg.X_LEN
+            output['steps_per_epoch'] = int(np.ceil(train_samples / self.cfg.BATCH_SIZE))
+
+        if 'validation' in datasets and len(datasets['validation']) > self.cfg.X_LEN:
+            val_samples = len(datasets['validation']) - self.cfg.X_LEN
+            output['validation_steps'] = int(np.ceil(val_samples / self.cfg.BATCH_SIZE))
+
         return output
 
     def _create_sequences(self, data:np.ndarray, target_indices:list[int]) -> tuple[np.ndarray, np.ndarray]:

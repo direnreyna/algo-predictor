@@ -65,7 +65,11 @@ class DataPreparer:
         self.log.info("Готовые данные не найдены. Запуск полного цикла предобработки.")
         
         # 2: Загрузка данных
-        file_name = f"{experiment_cfg.asset_name}.csv" 
+
+        asset_name = experiment_cfg.common_params.get("asset_name")
+        if not asset_name:
+            raise ValueError("Ключ 'asset_name' не найден в common_params.")
+        file_name = f"{asset_name}.csv"
         df = self.file_loader.read_csv(file_name, experiment_cfg=experiment_cfg)
 
         # Фаза 1: Статистический анализ

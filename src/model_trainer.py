@@ -16,6 +16,7 @@ from .entities import ExperimentConfig
 from .model_factory import ModelFactory
 from .dataset_builder import DatasetBuilder
 from .metrics_calculator import MetricsCalculator
+from .visualization_utils import VisualizationUtils
 from .cache_utils import get_cache_filename
 
 class ModelTrainer:
@@ -48,7 +49,13 @@ class ModelTrainer:
             dict: Словарь с результатами: мл-метрики, предсказания,
                   тестовые данные и скейлер для бэктестера.
         """
-        self.log.info(f"Запуск процесса обучения для модели типа '{experiment_cfg.model_type}'...")
+        common_params = experiment_cfg.common_params
+        model_type = common_params.get("model_type")
+        task_type = common_params.get("task_type")
+        if not model_type or not task_type:
+            raise ValueError("В common_params отсутствуют обязательные ключи 'model_type' или 'task_type'.")
+
+        self.log.info(f"Запуск процесса обучения для модели типа '{model_type}'...")
 
         # 1. Загрузка данных и артефактов
         cache_filename = get_cache_filename(experiment_cfg, self.cfg.PREPROCESSING_VERSION)
@@ -67,7 +74,7 @@ class ModelTrainer:
 
         # 2. Подготовка данных (делегирование DatasetBuilder)
         data_dict = self.dataset_builder.build(
-            model_type=experiment_cfg.model_type,
+            model_type=model_type,
             datasets=datasets,
             target_cols=target_cols,
             all_cols=all_cols
@@ -78,20 +85,14 @@ class ModelTrainer:
             source_run_id = warm_start["run_id"]
             self.log.info(f"Режим дообучения. Загрузка модели из MLflow run_id: {source_run_id}")
             try:
-                ###client = mlflow.tracking.MlflowClient()
-                ###client = mlflow.client.MlflowClient()
                 client = MlflowClient()
-                ### # MLflow загружает артефакты во временную папку
-                ### local_path = mlflow.artifacts.download_artifacts(
-                ###     run_id=source_run_id, artifact_path="model"
-                ### )
                 local_path = client.download_artifacts(run_id=source_run_id, path="model")
 
                 # Имя файла внутри папки 'model' может быть разным
                 model_file = next(Path(local_path).iterdir())
                 
                 # Используем нашу фабрику для загрузки, т.к. она знает о BaseModel
-                model_object = ModelFactory.get_model(experiment_cfg.model_type, {}).load(model_file)
+                model_object = ModelFactory.get_model(model_type, {}).load(model_file)
                 self.log.info("Модель для дообучения успешно загружена.")
             except Exception as e:
                 self.log.error(f"Не удалось загрузить модель из run_id '{source_run_id}': {e}")
@@ -99,14 +100,13 @@ class ModelTrainer:
         else:        
             # 3. Создание модели (делегирование ModelFactory)
             model_object = self.model_factory.get_model(
-                model_type=experiment_cfg.model_type,
+                model_type=model_type,
                 model_params=experiment_cfg.model_params
             )
         
-        
         # 4. Обучение модели (делегирование объекту модели)
         self.log.info("Начало обучения модели...")
-        history = model_object.train(data_dict) # Передаем весь словарь
+        ###history = model_object.train(data_dict) # Передаем весь словарь
         history = model_object.train(data_dict, train_params=experiment_cfg.train_params) # Передаем весь словарь 
         self.log.info("Обучение модели завершено.")
 
@@ -119,7 +119,7 @@ class ModelTrainer:
                 predictions = np.array(predictions) # для других типов
 
         ml_metrics = self.metrics_calculator.calculate(
-            task_type=experiment_cfg.task_type,
+            task_type=task_type,
             y_true=data_dict['y_test'],
             y_pred=predictions
         )
@@ -143,8 +143,20 @@ class ModelTrainer:
         if active_run:
             run_id = active_run.info.run_id
 
+            # Создаем и логируем график "Предсказания vs. Факт"
+            chart_path = self.cfg.ARTIFACTS_DIR / f"predictions_vs_actual_{run_id}.png"
+            VisualizationUtils.plot_predictions_vs_actual(
+                y_true_scaled=data_dict['y_test'],
+                y_pred_scaled=predictions,
+                scaler=scaler,
+                target_names=target_cols,
+                save_path=chart_path
+            )
+            mlflow.log_artifact(str(chart_path), artifact_path="charts")
+            chart_path.unlink() # Удаляем временный файл
+            
             # Определяем расширение файла в зависимости от типа модели
-            model_ext = ".keras" if experiment_cfg.model_type == "lstm" else ".pkl"
+            model_ext = ".keras" if model_type in ["lstm", "af_lstm"] else ".pkl"
 
             # Сохраняем модель во временный файл, чтобы залогировать в MLflow
             # temp_model_path = Path(self.cfg.MODELS_DIR) / f"temp_model_{run_id}.pkl"     
@@ -161,11 +173,10 @@ class ModelTrainer:
             self.log.warning("Нет активного MLflow run. Артефакты не будут залогированы.")
 
         # Определяем имя ключевой метрики и выводим его
-        ### self.log.info(f"Оценка модели завершена. Ключевая метрика (mse/accuracy): {list(ml_metrics.values())[0]:.4f}")
-        key_metric_name = "mse" if experiment_cfg.task_type == "regression" else "accuracy"
+        key_metric_name = "mse" if task_type == "regression" else "accuracy"
+
         key_metric_value = ml_metrics.get(key_metric_name, 0.0)
         self.log.info(f"Оценка модели завершена. Ключевая метрика ({key_metric_name}): {key_metric_value:.4f}")
-
 
         # 7. Подготовка тестовых данных для бэктестера
         # Нам нужен исходный, но уже масштабированный DataFrame `test`,

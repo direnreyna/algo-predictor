@@ -3,9 +3,11 @@
 import pandas as pd
 import numpy as np
 import vectorbt as vbt
+import mlflow
 from .app_config import AppConfig
 from .app_logger import AppLogger
 from .entities import ExperimentConfig
+from .visualization_utils import VisualizationUtils
 
 class Backtester:
     """
@@ -27,9 +29,10 @@ class Backtester:
         :param scaler: Обученный скейлер для обратного преобразования.
         :return: Словарь с финансовыми метриками (Sharpe, Drawdown и т.д.).
         """
-        self.log.info(f"Запуск финансового бэктеста для задачи типа '{experiment_cfg.task_type}'...")
-        
-        # 1. Восстанавливаем исходные, не масштабированные цены ##ДОБАВЛЕН БЛОК
+        task_type = experiment_cfg.common_params.get("task_type")
+        self.log.info(f"Запуск финансового бэктеста для задачи типа '{task_type}'...")
+
+        # 1. Восстанавливаем исходные, не масштабированные цены
         # Создаем копию, чтобы избежать SettingWithCopyWarning
         unscaled_test_df = test_df.copy()
         
@@ -55,7 +58,7 @@ class Backtester:
             offset = len(close_prices) - len(predictions)
             close_prices = close_prices.iloc[offset:]
 
-        if experiment_cfg.task_type == "classification":
+        if task_type == "classification":
             ### # Сигнал 2=UP (Buy), 1=SIDEWAYS (Hold), 0=DOWN (Sell)
             ### predictions = pd.Series(np.random.randint(0, 3, size=num_days), index=close_prices.index)
 
@@ -66,7 +69,7 @@ class Backtester:
             entries = predictions_series == 2
             exits = predictions_series == 0
 
-        elif experiment_cfg.task_type == "regression":
+        elif task_type == "regression":
             ### # Симулируем предсказания high и low для следующего дня
             ### predicted_high = close_prices * (1 + np.random.uniform(0.005, 0.02, size=num_days))
             ### predicted_low = close_prices * (1 - np.random.uniform(0.005, 0.02, size=num_days))
@@ -80,8 +83,8 @@ class Backtester:
             entries = predicted_low > close_prices
             exits = predicted_high < close_prices
         else:
-            raise ValueError(f"Неизвестная логика бэктестинга для типа задачи: {experiment_cfg.task_type}")
-        
+            raise ValueError(f"Неизвестная логика бэктестинга для типа задачи: {task_type}")
+
         # 3. Запуск векторизованного бэктеста
         # initial_cash=100000, freq='1D' - стандартные параметры для симуляции
 
@@ -127,16 +130,27 @@ class Backtester:
         # Обработка NaN/inf, которые могут возникнуть, если не было сделок
         sharpe = 0.0 if not np.isfinite(sharpe) else sharpe
         
-        ### # --- ЗАГЛУШКА ДЛЯ OPTUNA
-        ### # Генерируем случайный Sharpe для проверки работы оптимизатора
-        ### import random
-        ### sharpe = random.uniform(-0.5, 2.5)
-        ### # --- КОНЕЦ ЗАГЛУШКИ
-        
         financial_metrics = {
             "sharpe_ratio": sharpe,
             "max_drawdown": max_drawdown,
             "total_return_pct": total_return
         }
+
+        # Блок сохранения визуальных артефактов Бэктеста. Сохраняем отчеты, только если есть активный MLflow run
+        active_run = mlflow.active_run()
+        if active_run:
+            run_id = active_run.info.run_id
+            
+            # 1. Сохраняем HTML отчет
+            html_report_path = self.cfg.ARTIFACTS_DIR / f"backtest_report_{run_id}.html"
+            VisualizationUtils.save_backtest_report(portfolio, html_report_path)
+            mlflow.log_artifact(str(html_report_path), artifact_path="backtest_reports")
+            html_report_path.unlink()
+            
+            # 2. Сохраняем CSV со сделками
+            trades_csv_path = self.cfg.ARTIFACTS_DIR / f"trades_{run_id}.csv"
+            VisualizationUtils.save_trades_csv(portfolio, trades_csv_path)
+            mlflow.log_artifact(str(trades_csv_path), artifact_path="backtest_reports")
+            trades_csv_path.unlink()
 
         return financial_metrics

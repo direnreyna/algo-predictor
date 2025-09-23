@@ -62,9 +62,10 @@ class FileLoader:
             # 2. Логика загрузки на основе структуры
             if not has_header:
                 self.log.info("Заголовок в файле не обнаружен.")
-                if num_columns == 7 and experiment_cfg.column_mapping:
+                column_mapping = experiment_cfg.common_params.get("column_mapping")
+                if num_columns == 7 and column_mapping:
                     self.log.info(f"Обнаружено {num_columns} колонок. Применяем 'column_mapping' из конфига.")
-                    col_names = list(experiment_cfg.column_mapping.values())
+                    col_names = list(column_mapping.values())
                     df = pd.read_csv(file_path, header=None, names=col_names)
                 else:
                     raise ValueError(

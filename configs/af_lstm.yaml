@@ -1,68 +1,78 @@
 # configs/af_lstm.yaml
 
+# =================================================================
+# 0. ОБЩИЕ ПАРАМЕТРЫ
+# =================================================================
+mode: "search"  # "search", "train", "finetune"
+
 # Имя эксперимента для MLflow
 experiment_name: "Af LSTM EURUSD"
 
-# --- "Замороженные" параметры ---
-asset_name: "EURUSD_D"
-model_type: "af_lstm"       # Указываем фабрике, что нужна Keras/LSTM модель
-task_type: "regression"
+common_params:
+  asset_name: "EURUSD_D"
+  model_type: "af_lstm"
+  feature_set_name: "base_indicators"
+  column_mapping:
+    0: "Date"
+    1: "Time"
+    2: "Open"
+    3: "High"
+    4: "Low"
+    5: "Close"
+    6: "Volume"
+  task_type: "regression"
+  targets: ["Close"]
+  labeling_horizon: 20
 
-# Карта для файла без заголовка
-column_mapping:
-  0: "Date"
-  1: "Time"
-  2: "Open"
-  3: "High"
-  4: "Low"
-  5: "Close"
-  6: "Volume"
+# =================================================================
+# 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
+# =================================================================
+search_mode:
+  log_history_per_epoch: false # Управление логированием
+  n_trials: 100 # Сколько экспериментов провести
+  space:
+    feature_set_name:
+      type: categorical
+      choices: ["base_indicators", "ohlcv_with_rsi"]
+    labeling_horizon: {type: int, low: 5, high: 15}
+    # Параметры архитектуры модели
+    model_params:
+      lstm_units_1: {type: int, low: 32, high: 128}
+      lstm_units_2: {type: int, low: 16, high: 64}
+      dropout_rate_1: {type: float, low: 0.1, high: 0.5}
+      dropout_rate_2: {type: float, low: 0.1, high: 0.5}
+      out_units: {type: categorical, choices: [1]}
+      
+    # Параметры процесса обучения
+    train_params:
+      learning_rate: {type: float, low: 0.0001, high: 0.01, log: true}
+      epochs: {type: categorical, choices: [50, 100]}
+      #early_stopping_patience: {type: int, low: 10, high: 25}
 
-# --- Секция для дообучения ---
-finetune_from_run:
-  run_id: null
+# =================================================================
+# 2. НАСТРОЙКИ ДЛЯ РЕЖИМА ОБУЧЕНИЯ (mode: "train")
+# =================================================================
+train_mode:
+  log_history_per_epoch: true # Управление логированием
+  model_params:
+    lstm_units_1: 45
+    lstm_units_2: 45
+    dropout_rate_1: 0.49005485750576816
+    dropout_rate_2: 0.49005485750576816
+    out_units: 1
+  train_params:
+    learning_rate: 0.00016239055204116457
+    epochs: 500
+    early_stopping_patience: 50
+    early_stopping_monitor: 'val_loss'
 
-# --- Управление логированием ---
-log_history_per_epoch: false
-
-# --- Параметры для фиксированного запуска (хардмод) ---
-model_params: {}
-train_params: {}
-
-# --- Секция для перебора Optuna ---
-search_space:
-  # Параметры предобработки
-  feature_set_name:
-    type: categorical
-    choices: ["base_indicators", "ohlcv_with_rsi"]
-  
-  labeling_horizon:
-    type: int
-    low: 5
-    high: 15
-
-  # Вложенные параметры для архитектуры и обучения модели
-  lstm_units_1:       # Количество нейронов в 1-м LSTM слое
-    type: int
-    low: 32
-    high: 128
-    
-  lstm_units_2:       # Количество нейронов во 2-м LSTM слое
-    type: int
-    low: 16
-    high: 64
-
-  dropout_rate:       # Процент "выключения" нейронов для борьбы с переобучением
-    type: float
-    low: 0.1
-    high: 0.5
-    
-  learning_rate:
-    type: float
-    low: 0.0001
-    high: 0.01
-    log: true
-
-  epochs:
-    type: categorical
-    choices: [50]
+# =================================================================
+# 3. НАСТРОЙКИ ДЛЯ РЕЖИМА ДООБУЧЕНИЯ (mode: "finetune")
+# =================================================================
+finetune_mode:
+  log_history_per_epoch: true # Управление логированием
+  source_run_id: "fb863fa19b7d497585a38828eabf543a"
+  train_params:
+    learning_rate: 0.00001
+    epochs: 100
+    early_stopping_patience: 20

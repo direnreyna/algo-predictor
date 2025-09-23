@@ -1,45 +1,61 @@
 # configs/lstm_hard_mode.yaml
 
-# Имя эксперимента для MLflow
+# =================================================================
+# 0. ОБЩИЕ ПАРАМЕТРЫ
+# =================================================================
+mode: "train"
+
 experiment_name: "LSTM Hard Mode Training"
 
-# --- Все параметры теперь "заморожены" ---
-asset_name: "EURUSD_D"
-model_type: "lstm"
-task_type: "regression"
-feature_set_name: "base_indicators"
-labeling_horizon: 20
+common_params:
+  asset_name: "EURUSD_D"
+  model_type: "lstm"
+  feature_set_name: "base_indicators"
+  column_mapping:
+    0: "Date"
+    1: "Time"
+    2: "Open"
+    3: "High"
+    4: "Low"
+    5: "Close"
+    6: "Volume"
+  task_type: "regression"
+  targets: ["High", "Low"]
+  labeling_horizon: 20
 
-# Карта колонок
-column_mapping:
-  0: "Date"
-  1: "Time"
-  2: "Open"
-  3: "High"
-  4: "Low"
-  5: "Close"
-  6: "Volume"
+# =================================================================
+# 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
+# =================================================================
+search_mode:
+  log_history_per_epoch: false # Управление логированием
+  n_trials: 0
+  space: {}
 
-# --- Секция для дообучения
-finetune_from_run:
-  # Оставьте "run_id" пустым (или null) для режима поиска/первого обучения
-  # Заполните "run_id" значением Run ID () лучшего run'а модели из MLflow
-  run_id: null
+# =================================================================
+# 2. НАСТРОЙКИ ДЛЯ РЕЖИМА ОБУЧЕНИЯ (mode: "train")
+# =================================================================
+train_mode:
+  log_history_per_epoch: true # Управление логированием
+  model_params:
+    lstm_units_1: 83
+    lstm_units_2: 42
+    dropout_rate_1: 0.26706022765276477
+    dropout_rate_2: 0.26706022765276477
+    out_units: 2
+  train_params:
+    epochs: 20
+    learning_rate: 0.004218676180451373
+    early_stopping_patience: 20
+    early_stopping_monitor: 'val_loss'
 
-# --- Управление логированием (отключаем для режима поиска/включаем для режима (до)обучения) ---
-log_history_per_epoch: true
-
-# Параметры модели, взятые из лучшего trial
-model_params:
-  lstm_units: 83
-  dropout_rate: 0.26706022765276477
-
-train_params:
-  epochs: 200
-  learning_rate: 0.004218676180451373
-  early_stopping_patience: 20
-  early_stopping_monitor: 'val_loss'
-
-# --- Секция для перебора Optuna ---
-# (не используется при заполненном "finetune_from_run.run_id") ---
-search_space: {}
+# =================================================================
+# 3. НАСТРОЙКИ ДЛЯ РЕЖИМА ДООБУЧЕНИЯ (mode: "finetune")
+# =================================================================
+finetune_mode:
+  log_history_per_epoch: true # Управление логированием
+  source_run_id: null
+  train_params:
+    learning_rate: 0.00001
+    epochs: 100
+    early_stopping_patience: 20
+    early_stopping_monitor: 'val_loss'

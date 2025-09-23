@@ -17,21 +17,6 @@ class DataSplitter:
         self.log = log
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
-    ###def run(self, df:pd.DataFrame, experiment_cfg: ExperimentConfig) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, StandardScaler]:
-    ###    """
-    ###    Разделяет данные и, опционально, масштабирует их.
-    ###
-    ###    Args:
-    ###        df (pd.DataFrame): Полный DataFrame. MESSAGE: The user has run the code with differentiation disabled, but the `KeyError: '
-    ###        experiment_cfg (ExperimentConfig): Конфигурация эксперимента.
-    ###        scale_data (bool): Если True, выполняет масштабирование.
-    ###
-    ###    Returns:
-    ###        Кортеж из (train_df, val_df, test_df, scalerX_val'` persists. The log clearly shows `WARNING - Выборка 'validation' слишком мала для нарез | None).
-    ###    """
-    ###    train_df, val_df, test_df = self.split(df)
-    ###    return self.scale(train_df, val_df, test_df, experiment_cfg)
-
     def split(self, df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Выполняет только хронологическое разделение данных.
@@ -108,11 +93,22 @@ class DataSplitter:
         return train_df_scaled, val_df_scaled, test_df_scaled, scaler
 
     def _get_target_columns(self, experiment_cfg: ExperimentConfig) -> List[str]:
-        """Определяет имена целевых столбцов на основе типа задачи."""
-        if experiment_cfg.task_type == "classification":
+        """
+        Определяет имена целевых столбцов на основе common_params.
+        - Для classification: возвращает ['target'].
+        - Для regression: возвращает список вида ['target_<name>'] для каждой
+          колонки из common_params['targets'].
+        """
+        task_type = experiment_cfg.common_params.get("task_type")
+        
+        if task_type == "classification":
             return ['target']
-        elif experiment_cfg.task_type == "regression":
-            return ['target_high', 'target_low']
+
+        elif task_type == "regression":
+            targets = experiment_cfg.common_params.get("targets")
+            if not targets or not isinstance(targets, list):
+                raise ValueError("Ключ 'targets' (список колонок) не найден или имеет неверный формат в common_params.")
+            # Возвращаем имена целевых колонок с добавленным префиксом 'target_'
+            return [f"target_{col}" for col in targets]
         else:
-            # На случай добавления новых типов задач
-            raise NotImplementedError(f"Логика для определения целевых столбцов типа '{experiment_cfg.task_type}' не реализована.")
+            raise NotImplementedError(f"Логика для определения целевых столбцов типа '{task_type}' не реализована.")

@@ -25,13 +25,14 @@ class FeatureEngineer:
         :param experiment_cfg: Список технических индикаторов.
         :return: DataFrame, обогащенный новыми признаками.
         """
-        self.log.info(f"Генерация набора признаков '{experiment_cfg.feature_set_name}'...")
+        feature_set_name = experiment_cfg.common_params.get("feature_set_name")
+        self.log.info(f"Генерация набора признаков '{feature_set_name}'...")
 
         
-        # 1. Получаем список индикаторов из конфига
-        feature_list = self.cfg.FEATURE_SETS.get(experiment_cfg.feature_set_name)
+        # 1. Получаем список индикаторов из 
+        feature_list = self.cfg.FEATURE_SETS.get(feature_set_name)
         if not feature_list:
-            raise ValueError(f"Набор признаков '{experiment_cfg.feature_set_name}' не найден в AppConfig.")
+            raise ValueError(f"Набор признаков '{feature_set_name}' не найден в AppConfig.")
 
         df_copy = df.copy()
 

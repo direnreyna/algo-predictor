@@ -43,6 +43,7 @@ class AppConfig:
         self.DATA_DIR = LOCAL_ROOT / "data"
         self.MODELS_DIR = LOCAL_ROOT / "models"
         self.LOGS_DIR = LOCAL_ROOT / "logs"
+        self.ARTIFACTS_DIR = LOCAL_ROOT / "artifacts"
 
         # Путь к конфигурационному файлу для поиска по умолчанию
         self.DEFAULT_SEARCH_CONFIG_PATH = LOCAL_ROOT / "configs" / "lgbm_search.yaml"
@@ -149,7 +150,8 @@ class AppConfig:
         dirs_to_create = [
             self.DATA_DIR,
             self.MODELS_DIR,
-            self.LOGS_DIR
+            self.LOGS_DIR,
+            self.ARTIFACTS_DIR
         ]
         for directory in dirs_to_create:
             directory.mkdir(parents=True, exist_ok=True)
