@@ -8,6 +8,7 @@ from .app_config import AppConfig
 from .app_logger import AppLogger
 from .entities import ExperimentConfig
 from .visualization_utils import VisualizationUtils
+from .inverse_transformer import InverseTransformer
 
 class Backtester:
     """
@@ -20,48 +21,75 @@ class Backtester:
         self.log = log
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
-    def run(self, experiment_cfg: ExperimentConfig, predictions: np.ndarray, test_df: pd.DataFrame, scaler: object) -> dict:
+    def run(self, experiment_cfg: ExperimentConfig, predictions: np.ndarray, test_df: pd.DataFrame, inverse_transformer: InverseTransformer) -> dict:
         """
         Запускает бэктест.
-        :param experiment_cfg: Конфигурация текущего эксперимента.
-        :param predictions: Массив с предсказаниями модели (N, 2).
-        :param test_df: Полный масштабированный тестовый датафрейм.
-        :param scaler: Обученный скейлер для обратного преобразования.
-        :return: Словарь с финансовыми метриками (Sharpe, Drawdown и т.д.).
+
+        Args:
+            experiment_cfg (ExperimentConfig): Конфигурация текущего эксперимента.
+            predictions (np.ndarray): Массив с предсказаниями модели (масштабированными).
+            test_df (pd.DataFrame): Полный МАСШТАБИРОВАННЫЙ тестовый датафрейм.
+            inverse_transformer (InverseTransformer): Экземпляр для выполнения
+                обратного преобразования предсказаний.
+
+        Returns:
+            Словарь с финансовыми метриками (Sharpe, Drawdown и т.д.).
         """
         task_type = experiment_cfg.common_params.get("task_type")
         self.log.info(f"Запуск финансового бэктеста для задачи типа '{task_type}'...")
-
-        # 1. Восстанавливаем исходные, не масштабированные цены
-        # Создаем копию, чтобы избежать SettingWithCopyWarning
-        unscaled_test_df = test_df.copy()
-        
-        ### # Определяем колонки, которые были масштабированы (все кроме целевых)
-        ### feature_cols = [col for col in unscaled_test_df.columns if not col.startswith('target_')]
              
-        # Определяем ВСЕ числовые колонки, которые были масштабированы
-        cols_to_unscale = unscaled_test_df.select_dtypes(include=np.number).columns.tolist()
-   
-        ### # Применяем обратное преобразование
-        ### unscaled_test_df[feature_cols] = scaler.inverse_transform(unscaled_test_df[feature_cols])
-        
-        # Применяем обратное преобразование
-        unscaled_test_df[cols_to_unscale] = scaler.inverse_transform(unscaled_test_df[cols_to_unscale])
+        #### # Блок проверки наличия scaler
+        #### if scaler:                            
+        ####     # 1. Получаем немасштабированные предсказания
+        ####     # Создаем временный массив нужной формы для inverse_transform
+        ####     temp_array = np.zeros((len(predictions), len(test_df.columns)))
+        #### 
+        ####     # Находим индексы целевых колонок в test_df (на которых обучался scaler)
+        ####     target_indices = [test_df.columns.get_loc(f"target_{name}") for name in experiment_cfg.common_params.get("targets")]
+        ####     
+        ####     # Вставляем предсказания в нужные места
+        ####     for i, idx in enumerate(target_indices):
+        ####         temp_array[:, idx] = predictions[:, i]
+        #### 
+        ####     # Делаем inverse_transform
+        ####     unscaled_array = scaler.inverse_transform(temp_array)
+        ####     
+        ####     # Извлекаем только наши немасштабированные предсказания
+        ####     unscaled_predictions = unscaled_array[:, target_indices]
+        #### else:
+        ####     # Если скейлера не было, предсказания уже в нужном масштабе
+        ####     unscaled_predictions = predictions
+        #### 
+        #### ### # 1. Восстанавливаем исходные, не масштабированные цены
+        #### ### # Создаем копию, чтобы избежать SettingWithCopyWarning
+        #### ### unscaled_test_df = test_df.copy()
+        #### ### 
+        #### ### # Определяем ВСЕ числовые колонки, которые были масштабированы
+        #### ### cols_to_unscale = unscaled_test_df.select_dtypes(include=np.number).columns.tolist()
+        #### ### 
+        #### ### # Применяем обратное преобразование
+        #### ### unscaled_test_df[cols_to_unscale] = scaler.inverse_transform(unscaled_test_df[cols_to_unscale])
+        #### 
+        #### # Извлекаем цены закрытия. Они нужны для vbt.Portfolio.
+        #### # test_df индексирован по дате, поэтому close_prices будет правильной временной серией.
+        #### ### close_prices = unscaled_test_df['Close']
+        #### close_prices = original_test_df['Close']
 
-        # Извлекаем цены закрытия. Они нужны для vbt.Portfolio.
-        # test_df индексирован по дате, поэтому close_prices будет правильной временной серией.
-        close_prices = unscaled_test_df['Close']
+        # Шаг 1: Получаем предсказания в абсолютных значениях
+        y_pred_abs = inverse_transformer.transform(predictions)
+
+        # Шаг 2: Получаем оригинальные данные для бэктеста
+        original_test_df = inverse_transformer.original_test_df
+        close_prices = original_test_df['Close']
 
         # Для моделей, использующих окна, количество предсказаний меньше, чем исходный test set.
         # Необходимо синхронизировать close_prices с предсказаниями.
+        offset = 0
         if len(predictions) < len(close_prices):
             offset = len(close_prices) - len(predictions)
             close_prices = close_prices.iloc[offset:]
 
         if task_type == "classification":
-            ### # Сигнал 2=UP (Buy), 1=SIDEWAYS (Hold), 0=DOWN (Sell)
-            ### predictions = pd.Series(np.random.randint(0, 3, size=num_days), index=close_prices.index)
-
             # Преобразуем numpy-предсказания в именованный pd.Series для удобства
             predictions_series = pd.Series(predictions, index=close_prices.index)
 
@@ -70,18 +98,46 @@ class Backtester:
             exits = predictions_series == 0
 
         elif task_type == "regression":
-            ### # Симулируем предсказания high и low для следующего дня
-            ### predicted_high = close_prices * (1 + np.random.uniform(0.005, 0.02, size=num_days))
-            ### predicted_low = close_prices * (1 - np.random.uniform(0.005, 0.02, size=num_days))
+            ### # Извлекаем реальные предсказанные цены в виде pd.Series
+            pred_high_series = pd.Series(y_pred_abs[:, 0], index=close_prices.index)
+            pred_low_series = pd.Series(y_pred_abs[:, 1], index=close_prices.index)
+            ### pred_high_series = pd.Series(unscaled_predictions[:, 0], index=close_prices.index)
+            ### pred_low_series = pd.Series(unscaled_predictions[:, 1], index=close_prices.index)
 
-            # Извлекаем реальные предсказания модели
-            predicted_high = pd.Series(predictions[:, 0], index=close_prices.index)
-            predicted_low = pd.Series(predictions[:, 1], index=close_prices.index)
+            #### # Проверяем по флагу, было ли применено дифференцирование в предобработке
+            #### if experiment_cfg.was_differenced:
+            ####     self.log.info("Данные были дифференцированы. Выполняется обратное преобразование предсказаний.")
+            ####     ### # Нам нужны последние известные значения High и Low, чтобы к ним прибавить предсказанные приращения.
+            ####     ### # Они находятся в `unscaled_test_df` за один шаг до начала наших предсказаний.
+            ####     ### last_known_high = unscaled_test_df['High'].iloc[offset-1 : -1]
+            ####     ### last_known_low = unscaled_test_df['Low'].iloc[offset-1 : -1]
+            ####     
+            ####     # Берем "точки отсчета" из ОРИГИНАЛЬНОГО датафрейма.
+            ####     last_known_high = original_test_df['High'].iloc[offset-1 : -1]
+            ####     last_known_low = original_test_df['Low'].iloc[offset-1 : -1]
+            #### 
+            ####     # Восстанавливаем абсолютные значения, работая с NumPy массивами для надежности
+            ####     predicted_high = last_known_high.add(pred_high_series.values, fill_value=0)
+            ####     predicted_low = last_known_low.add(pred_low_series.values, fill_value=0)
+            ####     
+            ####     predicted_high.index = close_prices.index
+            ####     predicted_low.index = close_prices.index
+            #### else:
+            ####     ### # Если дифференцирования не было, просто используем исходные предсказания
+            ####     ### predicted_high = pred_high_series
+            ####     ### predicted_low = pred_low_series
+            #### 
+            ####     # Если дифференцирования не было, то unscaled_predictions - это уже абсолютные значения.
+            ####     predicted_high = pred_high_series
+            ####     predicted_low = pred_low_series
 
             # Простая стратегия: покупаем, если предсказанный low выше текущего close.
             # Продаем, если предсказанный high ниже текущего close.
-            entries = predicted_low > close_prices
-            exits = predicted_high < close_prices
+            entries = pred_low_series > close_prices
+            exits = pred_high_series < close_prices
+            ### entries = predicted_low > close_prices
+            ### exits = predicted_high < close_prices
+            
         else:
             raise ValueError(f"Неизвестная логика бэктестинга для типа задачи: {task_type}")
 

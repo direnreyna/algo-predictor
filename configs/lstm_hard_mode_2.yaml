@@ -1,4 +1,4 @@
-# configs/lstm_hard_mode.yaml
+# configs/lstm_hard_mode_2.yaml
 
 # =================================================================
 # 0. ОБЩИЕ ПАРАМЕТРЫ
@@ -9,8 +9,8 @@ experiment_name: "LSTM Hard Mode Training"
 
 common_params:
   asset_name: "EURUSD_D"
-  model_type: "lstm"
-  feature_set_name: "keras_custom"
+  model_type: "lstm_v2"
+  feature_set_name: "HiLo"
   differencing: "auto"
   column_mapping:
     0: "Date"
@@ -23,51 +23,36 @@ common_params:
   task_type: "regression"
   targets: ["High", "Low"]
   #targets: ["Close"]
-  labeling_horizon: 20
+  labeling_horizon: 2
 
 # =================================================================
 # 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
 # =================================================================
 search_mode:
-  # НЕПЕРЕБИРАЕМЫЕ при помощи Optuna параметры
   log_history_per_epoch: false # Управление логированием
   n_trials: 100
-  # --- Параметры целевой функции Optuna ---
-  objective_metric: "mse"
-  objective_direction: "minimize"
-  # --- Параметр targets модели ---
-  model_params:
-    out_units: 2  
-  train_params:
-    early_stopping_monitor: 'val_loss'
-  
-  # ПЕРЕБИРАЕМЫЕ при помощи Optuna параметры
   space:
-    # --- Общие параметры ---
     feature_set_name:
       type: categorical
-      choices: [
-        "keras_custom",
-        "base_indicators",
-        "ohlcv_with_rsi",
-        "ohlcv_with_stochastic",
-        "ohlcv_with_macd",
-        "ohlcv_with_obv"      
-      ]
-    labeling_horizon: {type: int, low: 10, high: 30}
-
-    # --- Параметры архитектуры модели ---
+      choices: ["ohlcv"]
+    labeling_horizon: {type: int, low: 1, high: 5}
+    # Параметры архитектуры модели
     model_params:
-      lstm_units_1: {type: int, low: 16, high: 256}
-      lstm_units_2: {type: int, low: 16, high: 256}
+      lstm_units_1: {type: int, low: 16, high: 128}
+      lstm_units_2: {type: int, low: 16, high: 128}
+      lstm_units_3: {type: int, low: 16, high: 128}
+      lstm_units_4: {type: int, low: 16, high: 128}
       dropout_rate_1: {type: float, low: 0.1, high: 0.5}
       dropout_rate_2: {type: float, low: 0.1, high: 0.5}
-
-    # --- Параметры процесса обучения ---
+      dropout_rate_3: {type: float, low: 0.1, high: 0.5}
+      dropout_rate_4: {type: float, low: 0.1, high: 0.5}
+      out_units: {type: categorical, choices: [2]}
+      
+    # Параметры процесса обучения
     train_params:
       learning_rate: {type: float, low: 0.0001, high: 0.01, log: true}
-      epochs: {type: categorical, choices: [100, 150, 200]}
-      early_stopping_patience: {type: int, low: 15, high: 50}
+      epochs: {type: categorical, choices: [50, 100]}
+      #early_stopping_patience: {type: int, low: 10, high: 25}
 
 # =================================================================
 # 2. НАСТРОЙКИ ДЛЯ РЕЖИМА ОБУЧЕНИЯ (mode: "train")
@@ -91,7 +76,7 @@ train_mode:
 # =================================================================
 finetune_mode:
   log_history_per_epoch: true # Управление логированием
-  source_run_id: 3a810cf793b74d84a73f13261299cb4d
+  source_run_id: null
   train_params:
     learning_rate: 0.00001
     epochs: 100

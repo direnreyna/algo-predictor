@@ -12,6 +12,7 @@ common_params:
   asset_name: "EURUSD_D"
   model_type: "af_lstm"
   feature_set_name: "base_indicators"
+  differencing: "auto"
   column_mapping:
     0: "Date"
     1: "Time"
@@ -28,8 +29,19 @@ common_params:
 # 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
 # =================================================================
 search_mode:
+  # НЕПЕРЕБИРАЕМЫЕ при помощи Optuna параметры
   log_history_per_epoch: false # Управление логированием
   n_trials: 100 # Сколько экспериментов провести
+  # --- Параметры целевой функции Optuna ---
+  objective_metric: "sharpe_ratio"
+  objective_direction: "maximize"
+  # --- Параметр targets модели ---
+  model_params:
+    out_units: 1
+  train_params:
+    early_stopping_monitor: 'val_loss'
+
+  # ПЕРЕБИРАЕМЫЕ при помощи Optuna параметры
   space:
     feature_set_name:
       type: categorical
@@ -41,7 +53,6 @@ search_mode:
       lstm_units_2: {type: int, low: 16, high: 64}
       dropout_rate_1: {type: float, low: 0.1, high: 0.5}
       dropout_rate_2: {type: float, low: 0.1, high: 0.5}
-      out_units: {type: categorical, choices: [1]}
       
     # Параметры процесса обучения
     train_params:

@@ -17,6 +17,7 @@ from .model_factory import ModelFactory
 from .dataset_builder import DatasetBuilder
 from .metrics_calculator import MetricsCalculator
 from .visualization_utils import VisualizationUtils
+from .inverse_transformer import InverseTransformer
 from .cache_utils import get_cache_filename
 
 class ModelTrainer:
@@ -62,6 +63,7 @@ class ModelTrainer:
         cache_path = self.cfg.DATA_DIR / cache_filename
         
         datasets = self.data_saver.load(file_path=cache_path)
+        original_test_df_raw = datasets['original_test']
         
         scaler_path = cache_path.with_suffix('.joblib')
         scaler = joblib.load(scaler_path)
@@ -71,6 +73,16 @@ class ModelTrainer:
             metadata = json.load(f)
         all_cols = metadata['columns']
         target_cols = metadata['target_columns']
+
+        original_test_df = pd.DataFrame(original_test_df_raw, columns=metadata['columns'])
+
+        # Создаем экземпляр InverseTransformer, который инкапсулирует всю логику
+        inverse_transformer = InverseTransformer(
+            scaler=scaler,
+            original_test_df=original_test_df,
+            all_cols=all_cols,
+            experiment_cfg=experiment_cfg
+        )
 
         # 2. Подготовка данных (делегирование DatasetBuilder)
         data_dict = self.dataset_builder.build(
@@ -118,10 +130,24 @@ class ModelTrainer:
             except AttributeError:
                 predictions = np.array(predictions) # для других типов
 
+        # Получаем абсолютные значения для корректного расчета метрик
+        y_pred_abs = inverse_transformer.transform(predictions)
+
+        # Извлекаем истинные АБСОЛЮТНЫЕ значения из оригинального датасета
+        num_predictions = len(predictions)
+        offset = len(original_test_df) - num_predictions
+        target_names = experiment_cfg.common_params.get("targets", [])
+        
+        y_true_abs_list = []
+        for name in target_names:
+            true_values = original_test_df[name].iloc[offset:].values
+            y_true_abs_list.append(true_values)
+        y_true_abs = np.stack(y_true_abs_list, axis=1)
+
         ml_metrics = self.metrics_calculator.calculate(
             task_type=task_type,
-            y_true=data_dict['y_test'],
-            y_pred=predictions
+            y_true_abs=y_true_abs,
+            y_pred_abs=y_pred_abs
         )
 
         # Добавляем метрики из истории обучения, если они есть
@@ -142,14 +168,17 @@ class ModelTrainer:
         active_run = mlflow.active_run()
         if active_run:
             run_id = active_run.info.run_id
-
+            
+            # Создаем DataFrame с правильным индексом для графика
+            plot_index = original_test_df.index[offset:]
+            y_true_df = pd.DataFrame(y_true_abs, index=plot_index, columns=target_names)
+            y_pred_df = pd.DataFrame(y_pred_abs, index=plot_index, columns=target_names)
+            
             # Создаем и логируем график "Предсказания vs. Факт"
             chart_path = self.cfg.ARTIFACTS_DIR / f"predictions_vs_actual_{run_id}.png"
             VisualizationUtils.plot_predictions_vs_actual(
-                y_true_scaled=data_dict['y_test'],
-                y_pred_scaled=predictions,
-                scaler=scaler,
-                target_names=target_cols,
+                y_true_abs=y_true_df,
+                y_pred_abs=y_pred_df,
                 save_path=chart_path
             )
             mlflow.log_artifact(str(chart_path), artifact_path="charts")
@@ -189,5 +218,5 @@ class ModelTrainer:
             "ml_metrics": ml_metrics,
             "predictions": predictions,
             "test_df": test_df,
-            "scaler": scaler
+            "inverse_transformer": inverse_transformer
         }

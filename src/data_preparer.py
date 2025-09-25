@@ -6,6 +6,8 @@ import json
 import joblib
 import mlflow
 
+from statsmodels.tsa.stattools import adfuller
+
 from .app_config import AppConfig
 from .app_logger import AppLogger
 from .feature_engineer import FeatureEngineer
@@ -72,8 +74,8 @@ class DataPreparer:
         file_name = f"{asset_name}.csv"
         df = self.file_loader.read_csv(file_name, experiment_cfg=experiment_cfg)
 
-        # Фаза 1: Статистический анализ
-        global_insights = self.statistical_analyzer.analyze(df)
+        # Статистический анализ
+        global_insights = self.statistical_analyzer.analyze(df, experiment_cfg=experiment_cfg)
         if mlflow.active_run():
             mlflow.log_params(global_insights)
 
@@ -93,27 +95,49 @@ class DataPreparer:
         # 5. Создание целевой переменной
         df_labeled = self.data_labeler.run(df_with_features, experiment_cfg)
         
-        ### # --- Диагностика: Проверяем DataFrame ПОСЛЕ Feature Engineering и Labeling ---
-        self.log.info(f"--- ДИАГНОСТИКА: DataFrame ПОСЛЕ Feature Engineering и Labeling ---")
-        self.log.info(f"Shape: {df_labeled.shape}\n{df_labeled.head().to_string()}")
-        ### # --- Конец Диагностики ---
+        # ### # --- Диагностика: Проверяем DataFrame ПОСЛЕ Feature Engineering и Labeling ---
+        # self.log.info(f"--- ДИАГНОСТИКА: DataFrame ПОСЛЕ Feature Engineering и Labeling ---")
+        # self.log.info(f"Shape: {df_labeled.shape}\n{df_labeled.head().to_string()}")
+        # ### # --- Конец Диагностики ---
 
         # 6. Разделение на выборки (ДО трансформаций и масштабирования)
         train_df, val_df, test_df = self.data_splitter.split(df_labeled)
         
-        # 7. Фаза 2: Статистическая трансформация (ДО масштабирования)
+        # Сохранение копии test_df до всех трансформаций. Нужно для восстановления мастштабированных приращений цен (без самих цен)
+        original_test_df = test_df.copy()
+
+        # 7. Статистическая трансформация (ДО масштабирования)
         self.log.info("Запуск фазы 2: Статистическая трансформация данных...")
         self.statistical_analyzer.fit(train_df, global_insights)
-        train_df = self.statistical_analyzer.transform(train_df, global_insights)
-        val_df = self.statistical_analyzer.transform(val_df, global_insights)
-        test_df = self.statistical_analyzer.transform(test_df, global_insights)
+
+        train_df, was_differenced_flag = self.statistical_analyzer.transform(train_df, experiment_cfg=experiment_cfg)
+        val_df, _ = self.statistical_analyzer.transform(val_df, experiment_cfg=experiment_cfg)
+        test_df, _ = self.statistical_analyzer.transform(test_df, experiment_cfg=experiment_cfg)
+        
+        # Устанавливаем флаг в конфиге на основе результата трансформации train-выборки
+        experiment_cfg.was_differenced = was_differenced_flag
         self.log.info("Статистическая трансформация завершена.")
 
-        ### # --- Диагностика: Проверяем Train DataFrame ПОСЛЕ статистической трансформации
-        self.log.info(f"--- ДИАГНОСТИКА: Train DataFrame ПОСЛЕ статистической трансформации ---")
-        self.log.info(f"Shape: {train_df.shape}\n{train_df.head().to_string()}")
-        self.log.info(f"Статистика (describe):\n{train_df.describe().to_string()}")
-        ### # --- Конец Диагностики ---
+        # ### # --- Диагностика: Проверяем Train DataFrame ПОСЛЕ статистической трансформации
+        # self.log.info(f"--- ДИАГНОСТИКА: Train DataFrame ПОСЛЕ статистической трансформации ---")
+        # self.log.info(f"Shape: {train_df.shape}\n{train_df.head().to_string()}")
+        # self.log.info(f"Статистика (describe):\n{train_df.describe().to_string()}")
+        # ### # --- Конец Диагностики ---
+
+        ### # 8. Контрольная проверка стационарности после всех манипуляций
+        ### diff_mode = experiment_cfg.common_params.get("differencing", "false")
+        ### was_differenced = (diff_mode == "true") or (diff_mode == "auto" and not global_insights.get("is_stationary", True))
+        ### experiment_cfg.was_differenced = was_differenced
+        ### 
+        ### if was_differenced:
+        ###     self.log.info("Контрольная проверка стационарности ряда 'Close' ПОСЛЕ трансформации...")
+        ###     adf_result_after = adfuller(train_df['Close'].dropna())
+        ###     p_value_after = adf_result_after[1]
+        ###     is_stationary_after = p_value_after < 0.05
+        ###     log_func = self.log.info if is_stationary_after else self.log.warning
+        ###     log_func(f"  ADF-тест ПОСЛЕ (p-value): {p_value_after:.4f}. Стационарный: {is_stationary_after}")
+        ###     if mlflow.active_run():
+        ###         mlflow.log_metric("adf_pvalue_after_transform", p_value_after)
 
         # 8. Масштабирование (ПОСЛЕ трансформаций)
         self.log.info("Масштабирование трансформированных данных...")
@@ -122,11 +146,11 @@ class DataPreparer:
         )
         self.log.info("Масштабирование завершено.")
         
-        ### # --- Диагностика: Проверяем Train DataFrame ПОСЛЕ масштабирования
-        self.log.info(f"--- ДИАГНОСТИКА: Train DataFrame ПОСЛЕ масштабирования ---")
-        self.log.info(f"Shape: {train_df.shape}\n{train_df.head().to_string()}")
-        self.log.info(f"Статистика (describe):\n{train_df.describe().to_string()}")
-        ### # --- Конец Диагностики ---
+        # ### # --- Диагностика: Проверяем Train DataFrame ПОСЛЕ масштабирования
+        # self.log.info(f"--- ДИАГНОСТИКА: Train DataFrame ПОСЛЕ масштабирования ---")
+        # self.log.info(f"Shape: {train_df.shape}\n{train_df.head().to_string()}")
+        # self.log.info(f"Статистика (describe):\n{train_df.describe().to_string()}")
+        # ### # --- Конец Диагностики ---
 
         # 9. Сохранение скейлера
         scaler_path = cache_path.with_suffix('.joblib')
@@ -158,6 +182,6 @@ class DataPreparer:
         ### # --- Конец диагностики ---
 
         # 11. Сохранение выборок
-        self.data_saver.save(file_path=cache_path, train=train_df, validation=val_df, test=test_df)
+        self.data_saver.save(file_path=cache_path, train=train_df, validation=val_df, test=test_df, original_test=original_test_df)
         
         self.log.info("Процесс предобработки данных завершен.")

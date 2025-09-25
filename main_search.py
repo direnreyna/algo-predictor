@@ -57,7 +57,8 @@ class SearchOrchestrator:
             if not isinstance(params_group, dict): continue
             
             for param_name, config in params_group.items():
-                param_type = config["type"]
+                if not isinstance(config, dict): continue
+                param_type = config.get("type")
                 value = None
 
                 if param_type == "categorical":
@@ -85,13 +86,19 @@ class SearchOrchestrator:
             self.log.info(f"--- Начало эксперимента (поиск): {run_name} (MLflow Run ID: {run.info.run_id}) ---")
             
             try:
-                # 1. Генерируем гиперпараметры для этого trial
-                model_params, train_params = self._generate_params_from_trial(trial)
-                
-                # 2. Блок умного переопределения параметров конфига для Оптуны
+                # 1. Загружаем "шаблон" с фиксированными параметрами из конфига
+                model_params = self.search_mode_config.get("model_params", {}).copy()
+                train_params = self.search_mode_config.get("train_params", {}).copy()
+
+                # 2. Генерируем гиперпараметры для этого trial и ОБНОВЛЯЕМ ими шаблон
+                trial_model_params, trial_train_params = self._generate_params_from_trial(trial)
+                model_params.update(trial_model_params)
+                train_params.update(trial_train_params)
+
+                # 3. Блок умного переопределения параметров конфига для Оптуны
                 # Создаем копию общих параметров, чтобы не изменять оригинал
                 current_common_params = self.common_params.copy()
-                
+
                 # Проверяем, перебираются ли общие параметры (такие как labeling_horizon)
                 # и обновляем их значения для текущего trial
                 search_space = self.search_mode_config.get("space", {})
@@ -127,12 +134,21 @@ class SearchOrchestrator:
                 
                 financial_metrics, ml_metrics = runner.run()
 
-                # 5. Логируем результаты
-                self.log.info(f"Эксперимент {run_name} завершен. Sharpe: {financial_metrics.get('sharpe_ratio', 0.0):.2f}")
+                # 5. Логируем результаты и возвращаем целевую метрику
+                objective_metric_name = self.search_mode_config.get("objective_metric", "sharpe_ratio")
+                direction = self.search_mode_config.get("objective_direction", "maximize")
+                default_value = float('inf') if direction == "minimize" else 0.0
+
+                # Ищем метрику сначала в ML, потом в финансовых результатах
+                metric_value = ml_metrics.get(objective_metric_name)
+                if metric_value is None:
+                    metric_value = financial_metrics.get(objective_metric_name, default_value)
+
+                self.log.info(f"Эксперимент {run_name} завершен. {objective_metric_name.upper()}: {metric_value:.4f}")
                 mlflow.log_metrics(financial_metrics)
                 mlflow.log_metrics(ml_metrics)
                 
-                return financial_metrics.get("sharpe_ratio", 0.0)
+                return metric_value
 
             except Exception as e:
                 self.log.error(f"Эксперимент {run_name} провалился: {e}", exc_info=True)
@@ -150,18 +166,22 @@ class SearchOrchestrator:
         storage_url = f"sqlite:///{study_db_path.as_posix()}"
         self.log.info(f"Используется хранилище Optuna: {storage_url}")
 
+        direction = self.search_mode_config.get("objective_direction", "maximize")
+        self.log.info(f"Направление оптимизации: {direction}")
+
         study = optuna.create_study(
             study_name=self.experiment_name,
             storage=storage_url,
             load_if_exists=True,
-            direction="maximize"
+            direction=direction
         )
         study.optimize(self.objective, n_trials=n_trials)
 
         self.log.separator()
         self.log.info("Процесс поиска завершен.")
         best_trial = study.best_trial
-        self.log.info(f"Лучший результат (Sharpe): {best_trial.value:.4f}")
+        objective_metric_name = self.search_mode_config.get("objective_metric", "sharpe_ratio")
+        self.log.info(f"Лучший результат ({objective_metric_name.upper()}): {best_trial.value:.4f}")
         self.log.info(f"Найден в эксперименте: trial_{best_trial.number}")
         
         best_run_id = None
@@ -229,15 +249,16 @@ class SearchOrchestrator:
                 self.log.error(f"Эксперимент {run_name} провалился: {e}", exc_info=True)
                 raise
 
-    def run(self, n_trials: int = 100):
+    def run(self, n_trials: int | None = None):
         """Запускает весь процесс на основе 'mode' из конфига."""
         self.log.info("Синхронизация источников данных...")
         file_loader = FileLoader(self.cfg, self.log)
         file_loader.sync_data_sources()
 
         if self.mode == "search":
-            # Передаем n_trials из CLI, если он был указан
-            self.search_mode_config['n_trials'] = n_trials
+            # Если n_trials передан из CLI (не None), он имеет приоритет
+            if n_trials is not None:
+                self.search_mode_config['n_trials'] = n_trials
             self._run_search()
         elif self.mode == "train":
             self._run_single_mode("train", self.train_mode_config)

@@ -77,6 +77,7 @@ class AppConfig:
         # Словарь с базовыми и составными наборами
         _feature_sets = {
             # Базовые "строительные блоки"
+            "HiLo": ['High', 'Low'],
             "ohlcv": ['Open', 'High', 'Low', 'Close', 'Volume'],
             "datetime_features": ["day_of_year_sin", "day_of_year_cos", "day_of_week_sin", "day_of_week_cos", "month_sin", "month_cos", "year", "day_sin", "day_cos", "quarter_sin", "quarter_cos"],
             "momentum_indicators": ['rsi_14', 'stoch_14_3_3'],
@@ -109,7 +110,11 @@ class AppConfig:
             "base_indicators": [
                 "ohlcv", "datetime_features", "momentum_indicators", "trend_indicators", "volatility_indicators", "volume_indicators", "custom_indicators"
             ],
-            "ohlcv_with_rsi": ["ohlcv", "datetime_features", "momentum_indicators"]
+            "keras_custom": ["ohlcv", "datetime_features", "atr_14"],
+            "ohlcv_with_rsi": ["ohlcv", "datetime_features", "rsi_14"],
+            "ohlcv_with_stochastic": ["ohlcv", "datetime_features", "stoch_14_3_3"],
+            "ohlcv_with_macd": ["ohlcv", "datetime_features", "macd_12_26_9"],
+            "ohlcv_with_obv": ["ohlcv", "datetime_features", "obv"],
         }
 
         # "Собираем" финальный словарь FEATURE_SETS, раскрывая ссылки
@@ -136,7 +141,7 @@ class AppConfig:
         self.GAP_SIZE = 20     # Разрыв в 20 дней
 
         ########## ПАРАМЕТРЫ МОДЕЛИ ##########
-        self.X_LEN = 60
+        self.X_LEN = 22
         self.BATCH_SIZE = 32
 
         # ВЫПОЛНЯЕМ СОЗДАНИЕ ПАПОК ОДИН РАЗ ПРИ ИМПОРТЕ МОДУЛЯ

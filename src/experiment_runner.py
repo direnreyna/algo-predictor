@@ -64,7 +64,7 @@ class ExperimentRunner:
             experiment_cfg=self.experiment_cfg,
             predictions=trainer_results["predictions"],
             test_df=trainer_results["test_df"],
-            scaler=trainer_results["scaler"]
+            inverse_transformer=trainer_results["inverse_transformer"]
         )
 
         self.log.info("--- Эксперимент успешно завершен ---")

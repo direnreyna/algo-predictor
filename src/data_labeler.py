@@ -81,8 +81,10 @@ class DataLabeler:
             for col_name in targets:
                 if col_name not in df_copy.columns:
                     raise ValueError(f"Исходная колонка '{col_name}' для создания цели не найдена в DataFrame.")
+
                 # Создаем новую колонку с префиксом 'target_'
                 df_copy[f'target_{col_name}'] = df_copy[col_name].shift(-1)
+
         else:
           raise ValueError(f"Неизвестный тип задачи: {task_type}")
 

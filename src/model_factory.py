@@ -64,6 +64,10 @@ class ModelFactory:
             from .models.af_lstm_model import AlgofusionLSTMModel
             return AlgofusionLSTMModel(model_params)
         
+        elif model_type == "lstm_v2":
+            from .models.keras_lstm_model_2 import KerasLSTMModelV2
+            return KerasLSTMModelV2(model_params)
+        
         ################################################################################
         # Здесь будут другие модели: 'lstm', 'autots' и т.д.
         ################################################################################        

@@ -10,6 +10,7 @@ experiment_name: "Default LGBM Search"
 common_params:
   asset_name: "EURUSD_D"
   model_type: "lightgbm"
+  differencing: "auto"
   column_mapping:
     0: "Date"
     1: "Time"

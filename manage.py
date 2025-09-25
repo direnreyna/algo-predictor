@@ -16,7 +16,7 @@ def main():
     нужному компоненту.
     """
 
-    ## БЛОК ПАРСИНГА АРГУМЕНТОВ
+    # Парсинг аргументов
     parser = argparse.ArgumentParser(description="Инструмент управления проектом алготрейдинга.")
     subparsers = parser.add_subparsers(dest="command", required=True, help="Доступные команды")
 
@@ -24,7 +24,7 @@ def main():
     parser_search = subparsers.add_parser("search", help="Запустить поиск моделей на основе конфигурации.")
     #parser_search.add_argument("--config", type=str, required=True, help="Путь к YAML-файлу с пространством поиска.")
     parser_search.add_argument("--config", type=str, help="Путь к YAML-файлу с пространством поиска. Если не указан, используется путь по умолчанию из AppConfig: self.DEFAULT_SEARCH_CONFIG_PATH.")
-    parser_search.add_argument("--n-trials", type=int, default=1, help="Количество итераций поиска.")
+    parser_search.add_argument("--n-trials", type=int, default=None, help="Количество итераций поиска. Переопределяет значение из YAML.")
 
     # Команда 'ui' для MLflow
     subparsers.add_parser("ui", help="Запустить веб-интерфейс MLflow.")

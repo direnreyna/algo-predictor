@@ -20,77 +20,39 @@ class VisualizationUtils:
     """
     @staticmethod
     def plot_predictions_vs_actual(
-        y_true_scaled: np.ndarray,
-        y_pred_scaled: np.ndarray,
-        scaler: 'StandardScaler',
-        target_names: list[str],
+        y_true_abs: pd.DataFrame,
+        y_pred_abs: pd.DataFrame,
         save_path: Path
     ) -> None:
         """
-        Строит и сохраняет график "Предсказания vs. Факт".
-
-        Производит обратную трансформацию данных для отображения в исходном масштабе.
+        Строит и сохраняет график "Предсказания vs. Факт" на основе
+        абсолютных, не масштабированных значений.
 
         Args:
-            y_true_scaled (np.ndarray): Масштабированные истинные значения.
-            y_pred_scaled (np.ndarray): Масштабированные предсказанные значения.
-            scaler (StandardScaler): Обученный скейлер для обратной трансформации.
-            target_names (list[str]): Имена целевых переменных (например, ['target_High', 'target_Low']).
+            y_true_abs (pd.DataFrame): DataFrame с истинными абсолютными значениями.
+            y_pred_abs (pd.DataFrame): DataFrame с предсказанными абсолютными значениями.
             save_path (Path): Путь для сохранения .png файла.
         """
         log = AppLogger()
         log.info(f"Создание графика 'Предсказания vs. Факт' в '{save_path.name}'...")
         
         try:
-            # Важно: scaler ожидает на вход DataFrame с определенными колонками
-            num_targets = len(target_names)
-            
-            # Создаем временные DataFrame для обратной трансформации
-            true_df = pd.DataFrame(y_true_scaled, columns=target_names)
-            pred_df = pd.DataFrame(y_pred_scaled, columns=target_names)
-            
-            # scaler.inverse_transform ожидает все колонки, которые он масштабировал.
-            # Создаем "пустышку" с нужными колонками, заполненную нулями,
-            # и вставляем в нее таргеты для корректной де-нормализации.
-            
-            # Получаем имена всех фичей, которые знает скейлер
-            try:
-                # Для scikit-learn >= 1.0
-                all_feature_names = scaler.get_feature_names_out()
-            except AttributeError:
-                # Для старых версий (менее надежно)
-                all_feature_names = [f'feature_{i}' for i in range(scaler.n_features_in_)]
-
-            dummy_df_shape = (len(true_df), len(all_feature_names))
-            
-            # Создаем "пустышки"
-            dummy_true = pd.DataFrame(np.zeros(dummy_df_shape), columns=all_feature_names)
-            dummy_pred = pd.DataFrame(np.zeros(dummy_df_shape), columns=all_feature_names)
-            
-            # Вставляем наши реальные данные
-            dummy_true[target_names] = true_df
-            dummy_pred[target_names] = pred_df
-
-            # Выполняем обратную трансформацию
-            y_true_unscaled_df = pd.DataFrame(scaler.inverse_transform(dummy_true), columns=all_feature_names)[target_names]
-            y_pred_unscaled_df = pd.DataFrame(scaler.inverse_transform(dummy_pred), columns=all_feature_names)[target_names]
-
             # Строим график
             plt.style.use('seaborn-v0_8-darkgrid')
             fig, ax = plt.subplots(figsize=(15, 7))
 
             # Отображаем первую цель
-            true_col_1_name = y_true_unscaled_df.columns[0]
-            pred_col_1_name = y_pred_unscaled_df.columns[0]
-            ax.plot(np.exp(y_true_unscaled_df[true_col_1_name]), label=f'Факт ({true_col_1_name})', color='dodgerblue', alpha=0.8)
-            ax.plot(np.exp(y_pred_unscaled_df[pred_col_1_name]), label=f'Предсказание ({pred_col_1_name})', color='orangered', linestyle='--')
+            true_col_1_name = y_true_abs.columns[0]
+            pred_col_1_name = y_pred_abs.columns[0]
+            ax.plot(y_true_abs.index, y_true_abs[true_col_1_name], label=f'Факт ({true_col_1_name})', color='dodgerblue', alpha=0.8)
+            ax.plot(y_pred_abs.index, y_pred_abs[pred_col_1_name], label=f'Предсказание ({pred_col_1_name})', color='orangered', linestyle='--')
             
             # Если есть вторая цель (например, Low), отображаем ее тоже
-            if len(target_names) > 1:
-                true_col_2_name = y_true_unscaled_df.columns[1]
-                pred_col_2_name = y_pred_unscaled_df.columns[1]
-                ax.plot(np.exp(y_true_unscaled_df[true_col_2_name]), label=f'Факт ({true_col_2_name})', color='deepskyblue', alpha=0.7)
-                ax.plot(np.exp(y_pred_unscaled_df[pred_col_2_name]), label=f'Предсказание ({pred_col_2_name})', color='tomato', linestyle=':')
+            if len(y_true_abs.columns) > 1:
+                true_col_2_name = y_true_abs.columns[1]
+                pred_col_2_name = y_pred_abs.columns[1]
+                ax.plot(y_true_abs.index, y_true_abs[true_col_2_name], label=f'Факт ({true_col_2_name})', color='deepskyblue', alpha=0.7)
+                ax.plot(y_pred_abs.index, y_pred_abs[pred_col_2_name], label=f'Предсказание ({pred_col_2_name})', color='tomato', linestyle=':')
 
             ax.set_title('Сравнение предсказаний и фактических значений', fontsize=16)
             ax.set_xlabel('Временные шаги (тестовая выборка)', fontsize=12)
