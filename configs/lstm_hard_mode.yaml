@@ -25,14 +25,37 @@ common_params:
   targets: ["Close"] # ["Close"] / ["High", "Low"]
   labeling_horizon: 20
   x_len: 22
-
+  
+  enrichment_data:
+    - filename: "BANK RATE EUR.csv"
+      data_type: "interest_rate"
+    - filename: "BANK RATE USD.csv"
+      data_type: "interest_rate"
+    - filename: "CPI_EUR.csv"
+      data_type: "cpi"
+    - filename: "CPI_USA.csv"
+      data_type: "cpi"
+  
+  visualization_params:
+    # Список данных для отображения на графике.
+    # Для каждого файла указывается список конкретных колонок.
+    plot_enrichment_data:
+      - filename: "BANK RATE EUR"
+        columns: ["rate"]
+      - filename: "BANK RATE USD"
+        columns: ["rate"]
+      - filename: "CPI_USA"
+        columns: ["cpi", "cpi_Fore"] # Можно указать несколько, например ["cpi", "cpi_Fore"]
+      - filename: "CPI_EUR"
+        columns: ["cpi", "cpi_Fore"]
+  
 # =================================================================
 # 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
 # =================================================================
 search_mode:
   # НЕПЕРЕБИРАЕМЫЕ при помощи Optuna параметры
   log_history_per_epoch: false # Управление логированием
-  n_trials: 200
+  n_trials: 5
   # --- Параметры целевой функции Optuna ---
   objective_metric: "sharpe_ratio" # mse / sharpe_ratio
   objective_direction: "maximize" # minimize / maximize

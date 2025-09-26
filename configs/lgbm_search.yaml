@@ -33,16 +33,40 @@ common_params:
   # --- Параметры для генерации лаговых признаков ---
   # Ключ - имя колонки, значение - список периодов для сдвига
   lag_features:
+    # High: [1, 2]
+    # Low: [1, 2]
     Open: [1, 2]
     Close: [1, 2]
     #Volume: [1, 2, 3]
+
+  enrichment_data:
+    - filename: "BANK RATE EUR.csv"
+      data_type: "interest_rate"
+    - filename: "BANK RATE USD.csv"
+      data_type: "interest_rate"
+    - filename: "CPI_EUR.csv"
+      data_type: "cpi"
+    - filename: "CPI_USA.csv"
+      data_type: "cpi"
   
+  visualization_params:
+    # Список данных для отображения на графике.
+    # Для каждого файла указывается список конкретных колонок.
+    plot_enrichment_data:
+    #  - filename: "BANK RATE EUR"
+    #    columns: ["rate"]
+      - filename: "BANK RATE USD"
+        columns: ["rate"]
+      - filename: "CPI_USA"
+        columns: ["cpi", "cpi_Fore"] # Можно указать несколько, например ["cpi", "cpi_Fore"]
+    #  - filename: "CPI_EUR"
+    #    columns: ["cpi", "cpi_Fore"]
 # =================================================================
 # 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
 # =================================================================
 search_mode:
   log_history_per_epoch: false # Управление логированием
-  n_trials: 100 # Значение по умолчанию для поиска
+  n_trials: 50 # Значение по умолчанию для поиска
   space:
     feature_set_name:
       type: categorical
@@ -51,7 +75,7 @@ search_mode:
     # Параметры LightGBM
     model_params:
       n_estimators:
-        {type: int, low: 50, high: 250}
+        {type: int, low: 50, high: 150}
       num_leaves:
         {type: int, low: 20, high: 50}
     train_params:
@@ -64,11 +88,11 @@ search_mode:
 train_mode:
   log_history_per_epoch: true
   model_params:
-    n_estimators:
-    num_leaves:
+    n_estimators: 110
+    num_leaves: 23
 
   train_params:
-    learning_rate: 
+    learning_rate: 0.027599717522677192
 
 # =================================================================
 # 3. НАСТРОЙКИ ДЛЯ РЕЖИМА ДООБУЧЕНИЯ (mode: "finetune")

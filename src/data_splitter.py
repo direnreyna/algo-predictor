@@ -34,23 +34,38 @@ class DataSplitter:
         """
         self.log.info(f"Начинаем хронологическое разделение датасета в режиме '{mode}'...")
 
-        # Флаг train_on_full_data имеет смысл только в режиме 'train'
-        train_on_full = False
-        if mode == 'train':
-            # В режиме train мы смотрим на train_mode_config
-            config_block = experiment_cfg.base_config.get('train_mode', {})
-            train_on_full = config_block.get('train_on_full_data', False)
+        # --- Определение параметров разделения на основе конфига и режима ---
+        train_on_full = experiment_cfg.common_params.get('train_on_full_data', False)
+        model_type = experiment_cfg.common_params.get('model_type')
+        
+        # Модели, которым всегда нужна валидационная выборка для early stopping
+        needs_validation = model_type in ['lstm', 'lstm_v2', 'af_lstm', 'tcn', 'transformer']
 
-        if train_on_full and mode == 'train':
-            self.log.info("Обнаружен флаг 'train_on_full_data'. Val-выборка будет пустой, gap будет уменьшен.")
+        # Применяем специальную логику только при соблюдении ВСЕХ условий
+        if mode == 'train' and train_on_full and not needs_validation:
+            self.log.info("Обнаружен флаг 'train_on_full_data' для табличной модели. Val-выборка будет пустой, gap будет уменьшен.")
             val_size = 0
             gap_size = self.cfg.GAP_SIZE // 2
         else:
             val_size = self.cfg.VAL_SIZE
             gap_size = self.cfg.GAP_SIZE
         
-        test_size = self.cfg.TEST_SIZE
+        ########### # Флаг train_on_full_data имеет смысл только в режиме 'train'
+        ########### #train_on_full = False
+        ########### if mode == 'train':
+        ###########     # В режиме train мы смотрим на train_mode_config
+        ###########     config_block = experiment_cfg.base_config.get('train_mode', {})
+        ###########     train_on_full = config_block.get('train_on_full_data', False)
+        ########### 
+        ########### if train_on_full and mode == 'train':
+        ###########     self.log.info("Обнаружен флаг 'train_on_full_data'. Val-выборка будет пустой, gap будет уменьшен.")
+        ###########     val_size = 0
+        ###########     gap_size = self.cfg.GAP_SIZE // 2
+        ########### else:
+        ###########     val_size = self.cfg.VAL_SIZE
+        ###########     gap_size = self.cfg.GAP_SIZE
 
+        test_size = self.cfg.TEST_SIZE
 
         min_len = test_size + val_size + 2 * gap_size
         if len(df) < min_len:

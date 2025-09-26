@@ -79,10 +79,10 @@ class FileLoader:
                     )
                 
                 # Загрузка данных
-                df = pd.read_csv(file_path, sep=schema['separator'])
+                df = pd.read_csv(file_path, sep=schema['separator'], decimal=',')
                 
                 # Присваиваем префикс, чтобы избежать конфликта имен колонок
-                prefix = schema['prefix']
+                prefix = file_path.stem.lower().replace(" ", "_") + "_"
                 df = df.rename(columns={col: f"{prefix}{col}" for col in df.columns if col != 'Date'})
 
             # --- РЕЖИМ 1: Загрузка основных данных эксперимента ---

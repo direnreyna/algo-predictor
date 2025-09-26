@@ -18,6 +18,7 @@ def get_cache_filename(experiment_cfg: ExperimentConfig, version: str) -> str:
         "task_type": common_params.get("task_type"),
         # Добавляем targets в хеш. Преобразуем список в кортеж, чтобы он был хешируемым
         "targets": tuple(common_params.get("targets", [])),
+        "enrichment_data": common_params.get("enrichment_data"),
     }
     
     # 2. Создаем стабильную строку из параметров

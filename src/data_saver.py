@@ -39,7 +39,12 @@ class DataSaver:
         self.log.info(f"Сохранение обработанных данных в '{file_path.name}'...") 
         try:
             #np.savez_compressed(self.save_path, **{name: df.to_numpy() for name, df in kwargs.items()})
-            np.savez_compressed(file_path, **{name: df.to_numpy() for name, df in kwargs.items()})
+            # np.savez_compressed(file_path, **{name: df.to_numpy() for name, df in kwargs.items()})
+
+            # Фильтруем kwargs, чтобы исключить значения None перед сохранением
+            data_to_save = {name: df.to_numpy() for name, df in kwargs.items() if df is not None}
+            np.savez_compressed(file_path, **data_to_save)
+
             self.log.info("Данные успешно сохранены.")
         except Exception as e:
             self.log.error(f"Ошибка при сохранении данных: {e}")

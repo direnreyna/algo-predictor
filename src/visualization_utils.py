@@ -22,7 +22,9 @@ class VisualizationUtils:
     def plot_predictions_vs_actual(
         y_true_abs: pd.DataFrame,
         y_pred_abs: pd.DataFrame,
-        save_path: Path
+        save_path: Path,
+        full_test_df: pd.DataFrame | None = None,
+        enrichment_features_to_plot: list[str] | None = None
     ) -> None:
         """
         Строит и сохраняет график "Предсказания vs. Факт" на основе
@@ -32,6 +34,10 @@ class VisualizationUtils:
             y_true_abs (pd.DataFrame): DataFrame с истинными абсолютными значениями.
             y_pred_abs (pd.DataFrame): DataFrame с предсказанными абсолютными значениями.
             save_path (Path): Путь для сохранения .png файла.
+            full_test_df (pd.DataFrame | None): Полный тестовый датафрейм
+                с обогащенными признаками для дополнительной отрисовки.
+            enrichment_features_to_plot (list[str] | None): Список имен файлов
+                (без расширения), признаки из которых нужно отрисовать.
         """
         log = AppLogger()
         log.info(f"Создание графика 'Предсказания vs. Факт' в '{save_path.name}'...")
@@ -45,19 +51,64 @@ class VisualizationUtils:
             true_col_1_name = y_true_abs.columns[0]
             pred_col_1_name = y_pred_abs.columns[0]
             ax.plot(y_true_abs.index, y_true_abs[true_col_1_name], label=f'Факт ({true_col_1_name})', color='dodgerblue', alpha=0.8)
-            ax.plot(y_pred_abs.index, y_pred_abs[pred_col_1_name], label=f'Предсказание ({pred_col_1_name})', color='orangered', linestyle='--')
+            ax.plot(y_pred_abs.index, y_pred_abs[pred_col_1_name], label=f'Предсказание ({pred_col_1_name})', color='orangered', linestyle='-')
             
             # Если есть вторая цель (например, Low), отображаем ее тоже
             if len(y_true_abs.columns) > 1:
                 true_col_2_name = y_true_abs.columns[1]
                 pred_col_2_name = y_pred_abs.columns[1]
                 ax.plot(y_true_abs.index, y_true_abs[true_col_2_name], label=f'Факт ({true_col_2_name})', color='deepskyblue', alpha=0.7)
-                ax.plot(y_pred_abs.index, y_pred_abs[pred_col_2_name], label=f'Предсказание ({pred_col_2_name})', color='tomato', linestyle=':')
+                ax.plot(y_pred_abs.index, y_pred_abs[pred_col_2_name], label=f'Предсказание ({pred_col_2_name})', color='tomato', linestyle='-')                
 
             ax.set_title('Сравнение предсказаний и фактических значений', fontsize=16)
             ax.set_xlabel('Временные шаги (тестовая выборка)', fontsize=12)
             ax.set_ylabel('Цена', fontsize=12)
-            ax.legend()
+
+            # --- Блок для отрисовки дополнительных признаков ---
+            if full_test_df is not None and enrichment_features_to_plot:
+                log.info(f"Добавление на график {len(enrichment_features_to_plot)} признаков...")
+                ax2 = ax.twinx()  # Создаем вторую ось Y
+                ax2.set_ylabel('Значения признаков', fontsize=12)
+
+                # Используем цветовую палитру для разнообразия
+                colors = plt.cm.viridis(np.linspace(0, 1, len(enrichment_features_to_plot)))
+
+                ### for i, feature_name_base in enumerate(enrichment_features_to_plot):
+                ###     # Формируем префикс для поиска колонок
+                ###     prefix_to_find = feature_name_base.lower().replace(" ", "_") + "_"
+                ###     
+                ###     # Находим все колонки в full_test_df, которые начинаются с этого префикса
+                ###     cols_to_plot = [col for col in full_test_df.columns if col.startswith(prefix_to_find)]
+                ###     
+                ###     if not cols_to_plot:
+                ###         log.warning(f"Признаки для '{feature_name_base}' (префикс: '{prefix_to_find}') не найдены в датафрейме.")
+                ###         continue
+                ### 
+                ###     for col_name in cols_to_plot:
+
+                for i, col_name in enumerate(enrichment_features_to_plot):
+                    if col_name not in full_test_df.columns:
+                        log.warning(f"Колонка '{col_name}' для визуализации не найдена в датафрейме.")
+                        continue
+                
+                    # Убедимся, что данные выравниваются по индексу графика
+                    series_to_plot = full_test_df.loc[y_true_abs.index, col_name]
+
+                    ax2.plot(
+                        series_to_plot.index,
+                        series_to_plot.to_numpy(),
+                        label=f'{col_name} (правая ось)',
+                        color=colors[i],
+                        linestyle=':',
+                        alpha=0.7)
+                
+                # Собираем легенды с обеих осей в одну
+                lines, labels = ax.get_legend_handles_labels()
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax2.legend(lines + lines2, labels + labels2, loc='best')
+            else:
+                ax.legend() # Если второй оси нет, показываем легенду для первой
+
             ax.grid(True)
             
             plt.tight_layout()

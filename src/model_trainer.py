@@ -111,7 +111,7 @@ class ModelTrainer:
                 self.log.error(f"Не удалось загрузить модель из run_id '{source_run_id}': {e}")
                 raise        
         else:        
-            # 3. Создание модели (делегирование ModelFactory)
+            # Создание модели (делегирование ModelFactory)
             model_object = self.model_factory.get_model(
                 model_type=model_type,
                 model_params=experiment_cfg.model_params
@@ -182,12 +182,42 @@ class ModelTrainer:
             y_true_df = pd.DataFrame(y_true_abs, index=plot_index, columns=target_names)
             y_pred_df = pd.DataFrame(y_pred_abs, index=plot_index, columns=target_names)
             
+            # Извлекаем параметры визуализации из конфига
+            vis_params = experiment_cfg.common_params.get("visualization_params", {})
+            ### features_to_plot = vis_params.get("plot_enrichment_data", [])
+
+            # Формируем точный список колонок для отрисовки
+            plot_config_list = vis_params.get("plot_enrichment_data", [])
+            exact_features_to_plot = []
+            if plot_config_list:
+                # Создаем временный словарь, где ключи - имена колонок в нижнем регистре
+                df_cols_lower = {col.lower(): col for col in original_test_df.columns}
+
+                for item in plot_config_list:
+                    filename_base = item.get("filename", "").lower().replace(" ", "_")
+                    columns_to_add = item.get("columns", [])
+                    for col in columns_to_add:
+                        # Собираем искомое полное имя в нижнем регистре
+                        full_col_name_lower = f"{filename_base}_{col.lower()}"
+
+                        # Ищем его в словаре и, если находим, берем оригинальное имя с правильным регистром
+                        original_col_name = df_cols_lower.get(full_col_name_lower)
+                        if original_col_name:
+                            exact_features_to_plot.append(original_col_name)
+                        else:
+                            self.log.warning(f"Колонка для '{full_col_name_lower}' не найдена для визуализации.")
+
+                        ### full_col_name = f"{filename_base}_{col.lower()}"
+                        ### exact_features_to_plot.append(full_col_name)
+
             # Создаем и логируем график "Предсказания vs. Факт"
             chart_path = self.cfg.ARTIFACTS_DIR / f"predictions_vs_actual_{run_id}.png"
             VisualizationUtils.plot_predictions_vs_actual(
                 y_true_abs=y_true_df,
                 y_pred_abs=y_pred_df,
-                save_path=chart_path
+                save_path=chart_path,
+                full_test_df=original_test_df,
+                enrichment_features_to_plot=exact_features_to_plot
             )
             mlflow.log_artifact(str(chart_path), artifact_path="charts")
             chart_path.unlink() # Удаляем временный файл

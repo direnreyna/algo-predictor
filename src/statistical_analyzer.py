@@ -225,12 +225,27 @@ class StatisticalAnalyzer:
             cols_to_exclude = [col for col in df_copy.columns if '_sin' in col or '_cos' in col]
             cols_to_exclude.extend([col for col in df_copy.columns if col.startswith('target_')])
             cols_to_exclude.append('year')
+
+            # Динамически исключаем колонки из enrichment_data
+            enrichment_config = experiment_cfg.common_params.get("enrichment_data", [])
+            if enrichment_config:
+                enrichment_prefixes = [
+                    item.get("filename", "").replace(".csv", "").lower().replace(" ", "_") + "_"
+                    for item in enrichment_config
+                ]
+                for prefix in enrichment_prefixes:
+                    cols_to_exclude.extend([
+                        col for col in df_copy.columns if col.startswith(prefix)
+                    ])
             
             # Добавим сюда популярные осцилляторы, которые уже стационарны
             oscillators = ['rsi', 'stoch', 'cci', 'mom', 'roc', 'willr']
             for osc in oscillators:
                 cols_to_exclude.extend([col for col in df_copy.columns if col.startswith(osc)])
             
+            # Динамически исключаем лаговые признаки
+            cols_to_exclude.extend([col for col in df_copy.columns if '_lag_' in col])
+
             # Получаем список колонок для дифференцирования
             cols_to_diff = [col for col in df_copy.select_dtypes(include=np.number).columns if col not in set(cols_to_exclude)]
 

@@ -25,7 +25,17 @@ common_params:
   targets: ["High", "Low"] # ["Close"] / ["High", "Low"]
   labeling_horizon: 2
   x_len: 22
-
+  
+  enrichment_data:
+    - filename: "BANK RATE EUR.csv"
+      data_type: "interest_rate"
+    - filename: "BANK RATE USD.csv"
+      data_type: "interest_rate"
+    - filename: "CPI_EUR.csv"
+      data_type: "cpi"
+    - filename: "CPI_USA.csv"
+      data_type: "cpi"
+  
 # =================================================================
 # 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
 # =================================================================
