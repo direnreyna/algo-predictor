@@ -23,9 +23,8 @@ class LightGBMModel(BaseModel):
     def train(self, data_dict: dict, train_params: dict | None = None) -> dict:
         if train_params is None: 
             train_params = {}
-        # Для LightGBM 'eval_set' является аналогом validation_data
-        X_train, y_train = data_dict['X_train'], data_dict['y_train']
-        ### X_val, y_val = data_dict.get('X_val'), data_dict.get('y_val')
+        # Для LightGBM 'eval_set' является аналогом validation_data. Используем DataFrame'ы вместо numpy-массивов
+        X_train, y_train = data_dict['X_train_df'], data_dict['y_train_df']
 
         # для MultiOutputRegressor не применяется eval_set:
         # eval_set = [(X_val, y_val)] if X_val is not None and y_val is not None else None
@@ -39,6 +38,7 @@ class LightGBMModel(BaseModel):
         return {}
     
     def predict(self, X):
+        # Ожидаем на вход DataFrame, чтобы избежать UserWarning
         return self.model.predict(X)
 
     def save(self, path:Path) -> None:
@@ -49,4 +49,3 @@ class LightGBMModel(BaseModel):
         model_instance = cls({}) # Создаем экземпляр с пустыми параметрами
         model_instance.model = joblib.load(path)
         return model_instance
-

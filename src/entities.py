@@ -10,6 +10,7 @@ class ExperimentConfig:
     """
     # Общие параметры, не зависящие от конкретного trial
     common_params: dict
+    base_config: dict
     # Гиперпараметры для конкретного trial
     model_params: dict = field(default_factory=dict)
     train_params: dict = field(default_factory=dict)

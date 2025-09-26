@@ -68,7 +68,48 @@ class AppConfig:
             "SBERP_D.csv": None,
             "TSLA_D.csv": None,
             "USDCNH_D.csv": None,
-            "USDRUB_D.csv": None
+            "USDRUB_D.csv": None,
+            # "US_Interest_Rate.csv": None,
+            # "EU_Interest_Rate.csv": None,
+            # "RU_Interest_Rate.csv": None,
+            # "US_CPI.csv": None,
+            # "EU_CPI.csv": None,
+            # "S&P500_D.csv": None,
+            "CPI_NZD.csv": None,
+            "CPI_JPY.csv": None,
+            "CPI_GBP.csv": None,
+            "CPI_CHF.csv": None,
+            "CPI_CAD.csv": None,
+            "CPI_AUD.csv": None,
+            "CPI_EUR.csv": None,
+            "CPI_USA.csv": None,
+            "BANK RATE USD.csv": None,
+            "BANK RATE NZD.csv": None,
+            "BANK RATE JPY.csv": None,
+            "BANK RATE GBP.csv": None,
+            "BANK RATE EUR.csv": None,
+            "BANK RATE CHF.csv": None,
+            "BANK RATE CAD.csv": None,
+            "BANK RATE AUD.csv": None
+        }
+
+        # --- Схемы (контракты) для валидации внешних данных ---
+        self.EXTERNAL_DATA_SCHEMAS = {
+            "interest_rate": {
+                "columns": ["Date", "rate"],
+                "prefix": "rate_",
+                "separator": ";"
+            },
+            "cpi": {
+                "columns": ["Date", "cpi", "cpi_Fore", "CPI_M", "CPI_M_Fore"],
+                "prefix": "cpi_",
+                "separator": ";"
+            },
+            "index_price": {
+                "columns": ["Date", "Time", "Open", "High", "Low", "Close", "Volume"],
+                "prefix": "idx_",
+                "separator": ","
+            }
         }
 
         ########## ПАРАМЕТРЫ ПРЕДОБРАБОТКИ И ЭКСПЕРИМЕНТОВ ##########
@@ -141,7 +182,7 @@ class AppConfig:
         self.GAP_SIZE = 20     # Разрыв в 20 дней
 
         ########## ПАРАМЕТРЫ МОДЕЛИ ##########
-        self.X_LEN = 22
+        # self.X_LEN = 22
         self.BATCH_SIZE = 32
 
         # ВЫПОЛНЯЕМ СОЗДАНИЕ ПАПОК ОДИН РАЗ ПРИ ИМПОРТЕ МОДУЛЯ

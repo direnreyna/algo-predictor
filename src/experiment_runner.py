@@ -32,13 +32,13 @@ class ExperimentRunner:
 
         self.log.info(f"Класс {self.__class__.__name__} инициализирован для эксперимента.")
 
-    def run(self, warm_start: dict | None = None) -> Tuple[dict, dict]:
+    def run(self, mode: str, warm_start: dict | None = None) -> Tuple[dict, dict]:
         """
         Запускает полный пайплайн для одного эксперимента.
 
         Args:
+            mode (str): Режим запуска ('search' или 'train'/'finetune').
             warm_start (dict | None): Конфигурация для дообучения.
-            log_history_per_epoch (bool): Флаг детального логирования.
 
         :return: Кортеж из двух словарей: (финансовые_метрики, мл_метрики).
         """
@@ -47,7 +47,7 @@ class ExperimentRunner:
         
         # 1: Подготовка данных. DataPreparer сам все загрузит и обработает.
         # Этот метод должен будет вернуть пути к кеш-файлам или сами данные.
-        self.data_preparer.run(experiment_cfg=self.experiment_cfg)
+        self.data_preparer.run(experiment_cfg=self.experiment_cfg, mode=mode)
 
         # 2: Обучение модели.
         # Этот метод должен будет вернуть словарь с ML-метриками.

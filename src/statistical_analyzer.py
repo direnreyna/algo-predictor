@@ -8,7 +8,7 @@ from statsmodels.stats.diagnostic import acorr_ljungbox, het_arch
 
 from .app_config import AppConfig
 from .app_logger import AppLogger
-from .experiment_runner import ExperimentConfig
+from .entities import ExperimentConfig
 
 class StatisticalAnalyzer:
     """
@@ -191,16 +191,19 @@ class StatisticalAnalyzer:
         self.log.info(f"Применение статистических трансформаций к выборке формы {df.shape}...")
         df_copy = df.copy()
         
-        # 1. Логарифмирование OHLCV (применяется всегда)
-        for col in ['Open', 'High', 'Low', 'Close', 'Volume']:
+        # 1. Логарифмирование OHLCV и ТАРГЕТОВ (применяется всегда)
+        targets = experiment_cfg.common_params.get("targets", [])
+        target_cols = [f"target_{t}" for t in targets]
+
+
+        cols_to_log = ['Open', 'High', 'Low', 'Close', 'Volume'] + target_cols
+
+        for col in cols_to_log:        
             if col in df_copy.columns:
                 # Добавляем небольшую константу, чтобы избежать log(0) для Volume
                 df_copy[col] = np.log(df_copy[col] + 1e-8)
 
-        # 2: Промежуточный тест на стационарность ПОСЛЕ логарифмирования для ВСЕХ таргетов
-        targets = experiment_cfg.common_params.get("targets", [])
-
-        # Проверяем стационарность КАЖДОГО таргета и собираем результаты
+        # 2: Тест на стационарность ПОСЛЕ логарифмирования для ВСЕХ таргетов
         any_target_is_non_stationary = False
         for target_name in targets:
             adf_result = adfuller(df_copy[target_name].dropna())

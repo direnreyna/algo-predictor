@@ -89,7 +89,8 @@ class ModelTrainer:
             model_type=model_type,
             datasets=datasets,
             target_cols=target_cols,
-            all_cols=all_cols
+            all_cols=all_cols,
+            experiment_cfg=experiment_cfg
         )
         
         # 3. Создание или загрузка модели
@@ -122,8 +123,15 @@ class ModelTrainer:
         history = model_object.train(data_dict, train_params=experiment_cfg.train_params) # Передаем весь словарь 
         self.log.info("Обучение модели завершено.")
 
+
         # 5. Оценка модели
-        predictions = model_object.predict(data_dict['X_test'])
+        # Выбираем правильный тестовый набор (DataFrame для табличных, numpy для остальных)
+        if model_type in ['lightgbm', 'catboost']:
+            X_to_predict = data_dict['X_test_df']
+        else:
+            X_to_predict = data_dict['X_test']
+
+        predictions = model_object.predict(X_to_predict)
         if not isinstance(predictions, np.ndarray):
             try:
                 predictions = predictions.toarray() # для sparse matrix
@@ -195,6 +203,7 @@ class ModelTrainer:
             
             mlflow.log_artifact(str(temp_model_path), artifact_path="model")
             mlflow.log_artifact(str(scaler_path), artifact_path="preprocessor")
+            mlflow.set_tag("scaler_filename", scaler_path.name)
 
             # Удаляем временный файл модели
             temp_model_path.unlink()

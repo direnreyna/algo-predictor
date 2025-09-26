@@ -22,9 +22,14 @@ def main():
 
     # Команда 'search' для поиска
     parser_search = subparsers.add_parser("search", help="Запустить поиск моделей на основе конфигурации.")
-    #parser_search.add_argument("--config", type=str, required=True, help="Путь к YAML-файлу с пространством поиска.")
     parser_search.add_argument("--config", type=str, help="Путь к YAML-файлу с пространством поиска. Если не указан, используется путь по умолчанию из AppConfig: self.DEFAULT_SEARCH_CONFIG_PATH.")
     parser_search.add_argument("--n-trials", type=int, default=None, help="Количество итераций поиска. Переопределяет значение из YAML.")
+
+    # Команда 'infer' для получения предсказаний
+    parser_infer = subparsers.add_parser("infer", help="Сделать предсказания на новых данных с помощью обученной модели.")
+    parser_infer.add_argument("--run-id", type=str, required=True, help="ID запуска в MLflow, модель из которого будет использована.")
+    parser_infer.add_argument("--data-path", type=str, required=True, help="Путь к новому CSV-файлу с данными.")
+    parser_infer.add_argument("--output-path", type=str, default=None, help="Опциональный путь для сохранения предсказаний в CSV.")
 
     # Команда 'ui' для MLflow
     subparsers.add_parser("ui", help="Запустить веб-интерфейс MLflow.")
@@ -52,6 +57,26 @@ def main():
         print(f"--- Запуск поиска моделей по конфигу: {args.config}, n_trials={args.n_trials} ---")
         orchestrator = SearchOrchestrator(base_config=base_config, experiment_name=experiment_name) 
         orchestrator.run(n_trials=args.n_trials)
+
+    elif args.command == "infer":
+        from src.inferencer import Inferencer
+        from src.app_logger import AppLogger
+        from pathlib import Path
+        
+        cfg = AppConfig()
+        log = AppLogger()
+
+        inferencer = Inferencer(cfg, log)
+        predictions_df = inferencer.run(run_id=args.run_id, data_path=Path(args.data_path))
+        
+        if args.output_path:
+            output_file = Path(args.output_path)
+            predictions_df.to_csv(output_file)
+            print(f"Предсказания успешно сохранены в: {output_file.resolve()}")
+        else:
+            print("\n--- Предсказания ---")
+            print(predictions_df.to_string())
+            print("-------------------\n")
 
     elif args.command == "ui":
         print("--- Запуск MLflow UI ---")

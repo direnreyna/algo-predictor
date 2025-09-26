@@ -111,9 +111,10 @@ class SearchOrchestrator:
                     if param_name in trial.params:
                         current_common_params[param_name] = trial.params[param_name]
 
-                # 3. Собираем полный "паспорт" эксперимента
+                # 4. Собираем полный "паспорт" эксперимента
                 experiment_config = ExperimentConfig(
                     common_params=current_common_params,
+                    base_config=self.base_config,
                     model_params=model_params,
                     train_params=train_params,
                     log_history_per_epoch=self.search_mode_config.get("log_history_per_epoch", False)
@@ -123,7 +124,7 @@ class SearchOrchestrator:
                 mlflow.log_params(experiment_config.to_dict())
                 trial.set_user_attr("full_params", experiment_config.to_dict())
 
-                # 4. Создаем и запускаем "прораба", который выполнит всю грязную работу
+                # 5. Создаем и запускаем "прораба", который выполнит всю грязную работу
                 runner = ExperimentRunner(
                     global_cfg=self.cfg, 
                     experiment_cfg=experiment_config,
@@ -131,10 +132,10 @@ class SearchOrchestrator:
                     model_trainer=self.model_trainer,
                     backtester=self.backtester
                 )
-                
-                financial_metrics, ml_metrics = runner.run()
+                assert self.mode is not None, "Режим 'mode' не должен быть None на этом этапе"
+                financial_metrics, ml_metrics = runner.run(mode=self.mode)
 
-                # 5. Логируем результаты и возвращаем целевую метрику
+                # 6. Логируем результаты и возвращаем целевую метрику
                 objective_metric_name = self.search_mode_config.get("objective_metric", "sharpe_ratio")
                 direction = self.search_mode_config.get("objective_direction", "maximize")
                 default_value = float('inf') if direction == "minimize" else 0.0
@@ -228,6 +229,7 @@ class SearchOrchestrator:
 
                 experiment_config = ExperimentConfig(
                     common_params=self.common_params,
+                    base_config=self.base_config,
                     model_params=model_params,
                     train_params=train_params,
                     log_history_per_epoch=config.get("log_history_per_epoch", True)
@@ -240,7 +242,8 @@ class SearchOrchestrator:
                     data_preparer=self.data_preparer, model_trainer=self.model_trainer,
                     backtester=self.backtester
                 )
-                financial_metrics, ml_metrics = runner.run(warm_start=warm_start)
+                assert self.mode is not None, "Режим 'mode' не должен быть None на этом этапе"
+                financial_metrics, ml_metrics = runner.run(warm_start=warm_start, mode=self.mode)
 
                 self.log.info(f"Эксперимент {run_name} завершен. Sharpe: {financial_metrics.get('sharpe_ratio', 0.0):.2f}")
                 mlflow.log_metrics(financial_metrics)

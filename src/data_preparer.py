@@ -17,6 +17,7 @@ from .data_saver import DataSaver
 from .entities import ExperimentConfig
 from .file_loader import FileLoader
 from .statistical_analyzer import StatisticalAnalyzer
+from .data_enricher import DataEnricher
 from .cache_utils import get_cache_filename
 
 class DataPreparer:
@@ -45,15 +46,17 @@ class DataPreparer:
         self.data_splitter = DataSplitter(cfg, log)
         self.data_saver = DataSaver(cfg, log)
         self.statistical_analyzer = StatisticalAnalyzer(cfg, log)
+        self.data_enricher = DataEnricher(cfg, log, self.file_loader)
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
-    def run(self, experiment_cfg: ExperimentConfig) -> None:
+    def run(self, experiment_cfg: ExperimentConfig, mode: str) -> None:
         """
         Выполняет полный цикл предобработки данных.
-        
-        :param df: Исходный DataFrame для обработки.
-        :return: Кортеж с подготовленными выборками (например, X_train, y_train, X_val, y_val, ...).
-        """
+
+        Args:
+            experiment_cfg (ExperimentConfig): Конфигурация эксперимента.
+            mode (str): Режим запуска ('search' или 'train'/'finetune').
+        """ 
         self.log.info("Начало процесса предобработки данных")
         
         # 0. Генерируем имя файла и проверяем кеш
@@ -74,6 +77,11 @@ class DataPreparer:
         file_name = f"{asset_name}.csv"
         df = self.file_loader.read_csv(file_name, experiment_cfg=experiment_cfg)
 
+        # Обогащение внешними данными
+        enrichment_config = experiment_cfg.common_params.get("enrichment_data")
+        if enrichment_config:
+            df = self.data_enricher.run(df, enrichment_config)
+        
         # Статистический анализ
         global_insights = self.statistical_analyzer.analyze(df, experiment_cfg=experiment_cfg)
         if mlflow.active_run():
@@ -101,17 +109,19 @@ class DataPreparer:
         # ### # --- Конец Диагностики ---
 
         # 6. Разделение на выборки (ДО трансформаций и масштабирования)
-        train_df, val_df, test_df = self.data_splitter.split(df_labeled)
-        
+        train_df, val_df, test_df = self.data_splitter.split(df_labeled, mode=mode, experiment_cfg=experiment_cfg)
+
         # Сохранение копии test_df до всех трансформаций. Нужно для восстановления мастштабированных приращений цен (без самих цен)
         original_test_df = test_df.copy()
 
         # 7. Статистическая трансформация (ДО масштабирования)
-        self.log.info("Запуск фазы 2: Статистическая трансформация данных...")
+        self.log.info("Запуск статистической трансформации данных...")
         self.statistical_analyzer.fit(train_df, global_insights)
 
         train_df, was_differenced_flag = self.statistical_analyzer.transform(train_df, experiment_cfg=experiment_cfg)
-        val_df, _ = self.statistical_analyzer.transform(val_df, experiment_cfg=experiment_cfg)
+        # Трансформируем val_df только если он существует
+        if val_df is not None:
+            val_df, _ = self.statistical_analyzer.transform(val_df, experiment_cfg=experiment_cfg)
         test_df, _ = self.statistical_analyzer.transform(test_df, experiment_cfg=experiment_cfg)
         
         # Устанавливаем флаг в конфиге на основе результата трансформации train-выборки

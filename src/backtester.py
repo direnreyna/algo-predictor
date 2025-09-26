@@ -98,45 +98,36 @@ class Backtester:
             exits = predictions_series == 0
 
         elif task_type == "regression":
-            ### # Извлекаем реальные предсказанные цены в виде pd.Series
-            pred_high_series = pd.Series(y_pred_abs[:, 0], index=close_prices.index)
-            pred_low_series = pd.Series(y_pred_abs[:, 1], index=close_prices.index)
-            ### pred_high_series = pd.Series(unscaled_predictions[:, 0], index=close_prices.index)
-            ### pred_low_series = pd.Series(unscaled_predictions[:, 1], index=close_prices.index)
+            # Динамически определяем стратегию на основе количества таргетов
+            num_targets = y_pred_abs.shape[1]
+            targets = experiment_cfg.common_params.get("targets", [])
 
-            #### # Проверяем по флагу, было ли применено дифференцирование в предобработке
-            #### if experiment_cfg.was_differenced:
-            ####     self.log.info("Данные были дифференцированы. Выполняется обратное преобразование предсказаний.")
-            ####     ### # Нам нужны последние известные значения High и Low, чтобы к ним прибавить предсказанные приращения.
-            ####     ### # Они находятся в `unscaled_test_df` за один шаг до начала наших предсказаний.
-            ####     ### last_known_high = unscaled_test_df['High'].iloc[offset-1 : -1]
-            ####     ### last_known_low = unscaled_test_df['Low'].iloc[offset-1 : -1]
-            ####     
-            ####     # Берем "точки отсчета" из ОРИГИНАЛЬНОГО датафрейма.
-            ####     last_known_high = original_test_df['High'].iloc[offset-1 : -1]
-            ####     last_known_low = original_test_df['Low'].iloc[offset-1 : -1]
-            #### 
-            ####     # Восстанавливаем абсолютные значения, работая с NumPy массивами для надежности
-            ####     predicted_high = last_known_high.add(pred_high_series.values, fill_value=0)
-            ####     predicted_low = last_known_low.add(pred_low_series.values, fill_value=0)
-            ####     
-            ####     predicted_high.index = close_prices.index
-            ####     predicted_low.index = close_prices.index
-            #### else:
-            ####     ### # Если дифференцирования не было, просто используем исходные предсказания
-            ####     ### predicted_high = pred_high_series
-            ####     ### predicted_low = pred_low_series
-            #### 
-            ####     # Если дифференцирования не было, то unscaled_predictions - это уже абсолютные значения.
-            ####     predicted_high = pred_high_series
-            ####     predicted_low = pred_low_series
+            if num_targets == 1 and targets[0] == 'Close':
+                self.log.info("Режим бэктеста: предсказание 1 таргета (Close).")
+                # Стратегия: покупаем, если предсказанный Close выше текущего.
+                predicted_close = pd.Series(y_pred_abs[:, 0], index=close_prices.index)
+                entries = predicted_close > close_prices
+                exits = predicted_close < close_prices
+            elif num_targets == 2 and 'High' in targets and 'Low' in targets:
+                self.log.info("Режим бэктеста: предсказание 2 таргетов (High, Low).")
+                # Стратегия: покупаем, если предсказанный Low выше текущего Close.
+                pred_high_series = pd.Series(y_pred_abs[:, 0], index=close_prices.index)
+                pred_low_series = pd.Series(y_pred_abs[:, 1], index=close_prices.index)
+                entries = pred_low_series > close_prices
+                exits = pred_high_series < close_prices
+            else:
+                raise NotImplementedError(
+                    f"Логика бэктеста для набора таргетов {targets} (количество: {num_targets}) не реализована."
+                )
 
-            # Простая стратегия: покупаем, если предсказанный low выше текущего close.
-            # Продаем, если предсказанный high ниже текущего close.
-            entries = pred_low_series > close_prices
-            exits = pred_high_series < close_prices
-            ### entries = predicted_low > close_prices
-            ### exits = predicted_high < close_prices
+            ### ### # Извлекаем реальные предсказанные цены в виде pd.Series
+            ### pred_high_series = pd.Series(y_pred_abs[:, 0], index=close_prices.index)
+            ### pred_low_series = pd.Series(y_pred_abs[:, 1], index=close_prices.index)
+            ### 
+            ### # Простая стратегия: покупаем, если предсказанный low выше текущего close.
+            ### # Продаем, если предсказанный high ниже текущего close.
+            ### entries = pred_low_series > close_prices
+            ### exits = pred_high_series < close_prices
             
         else:
             raise ValueError(f"Неизвестная логика бэктестинга для типа задачи: {task_type}")

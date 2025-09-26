@@ -3,13 +3,15 @@
 # =================================================================
 # 0. ОБЩИЕ ПАРАМЕТРЫ
 # =================================================================
-mode: "search"
+mode: "search" # search / train / finetune
 
+# Имя эксперимента для MLflow
 experiment_name: "Default LGBM Search"
 
 common_params:
   asset_name: "EURUSD_D"
   model_type: "lightgbm"
+  feature_set_name: "base_indicators"
   differencing: "auto"
   column_mapping:
     0: "Date"
@@ -20,11 +22,21 @@ common_params:
     5: "Close"
     6: "Volume"
   task_type: "regression"
-  targets: ["High", "Low"]
+  targets: ["High", "Low"] #  ["High", "Low"] / ["Close"]
   # labeling_horizon будет перебираться в search_mode,
   # но можно задать значение по умолчанию для других режимов.
   labeling_horizon: 20
 
+  # Объединять Train+Validation для "плоских" моделей
+  train_on_full_data: true
+
+  # --- Параметры для генерации лаговых признаков ---
+  # Ключ - имя колонки, значение - список периодов для сдвига
+  lag_features:
+    Open: [1, 2]
+    Close: [1, 2]
+    #Volume: [1, 2, 3]
+  
 # =================================================================
 # 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
 # =================================================================

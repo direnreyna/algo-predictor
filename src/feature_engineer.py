@@ -28,7 +28,6 @@ class FeatureEngineer:
         feature_set_name = experiment_cfg.common_params.get("feature_set_name")
         self.log.info(f"Генерация набора признаков '{feature_set_name}'...")
 
-        
         # 1. Получаем список индикаторов из 
         feature_list = self.cfg.FEATURE_SETS.get(feature_set_name)
         if not feature_list:
@@ -126,15 +125,21 @@ class FeatureEngineer:
         ### self.log.info(f"Состояние NaN перед финальной очисткой (Total={df_copy.isna().sum().sum()}):\n{df_copy.isna().sum()}")
         ### # --- Конец Диагностики ---
 
-        # 5. Финальная очистка: заполнение и отсечение периода прогрева ##ДОБАВЛЕН БЛОК
-        # 5.1 Заполняем пропуски в середине данных (от выходных и т.д.)
+        # 5. Генерация лаговых признаков (если указано в конфиге)
+        lag_config = experiment_cfg.common_params.get("lag_features")
+        if lag_config:
+            self.log.info("Генерация лаговых признаков...")
+            self._calculate_lag_features(df_copy, lag_config)
+
+        # 6. Финальная очистка: заполнение и отсечение периода прогрева
+        # 6.1 Заполняем пропуски в середине данных (от выходных и т.д.)
         initial_nan_count = df_copy.isna().sum().sum()
         if initial_nan_count > 0:
             df_copy.ffill(inplace=True)
             filled_nan_count = initial_nan_count - df_copy.isna().sum().sum()
             self.log.info(f"Заполнение NaN (forward fill): заполнено {filled_nan_count} значений.")
 
-        # 5.2 Отсекаем начальный период "прогрева", где ffill не смог помочь
+        # 6.2 Отсекаем начальный период "прогрева", где ffill не смог помочь
         # Считаем, сколько NaN осталось в начале каждой колонки. Логика:
         # ===============================================================
         # df_copy.notna() = делает все NaN = False, остальные = True.
@@ -155,6 +160,25 @@ class FeatureEngineer:
         
         self.log.info(f"Генерация признаков завершена. Итоговая форма данных: {df_copy.shape}")
         return df_copy
+
+    def _calculate_lag_features(self, df: pd.DataFrame, lag_config: dict) -> None:
+        """
+        Создает лаговые признаки для указанных колонок.
+        Модифицирует DataFrame на месте (inplace).
+
+        Args:
+            df (pd.DataFrame): DataFrame для добавления признаков.
+            lag_config (dict): Словарь, где ключ - имя колонки,
+                               а значение - список лагов.
+        """
+        for col_name, periods in lag_config.items():
+            if col_name not in df.columns:
+                self.log.warning(f"Колонка '{col_name}' для создания лагов не найдена. Пропускается.")
+                continue
+            
+            for p in periods:
+                new_col_name = f"{col_name}_lag_{p}"
+                df[new_col_name] = df[col_name].shift(p)
 
     def _apply_indicator(self, df: pd.DataFrame, indicator_str: str) -> None:
         """
