@@ -52,13 +52,12 @@ class DatasetBuilder:
         """
         x_len = experiment_cfg.common_params.get("x_len", 22)
 
+
         if model_type in ['lightgbm', 'catboost']: # Для всех табличных моделей
             return self._build_for_tabular(datasets, target_cols, all_cols)
 
         elif model_type in ['lstm', 'lstm_v2', 'af_lstm', 'tcn', 'transformer']: # Для всех Keras-моделей
             return self._build_for_keras(datasets, target_cols, all_cols, x_len)
-        ###elif model_type in ['af_lstm']: # Для af-модели
-        ###    return self._build_for_keras(datasets, target_cols, all_cols)
         elif model_type == 'autots':
             return self._build_for_autots(datasets, target_cols, all_cols)
         else:
@@ -66,22 +65,37 @@ class DatasetBuilder:
 
     def _build_for_autots(self, datasets: dict, target_cols: list[str], all_cols: list[str]) -> dict:
         """
-        Готовит данные для AutoTS. Возвращает pandas DataFrame.
+        Готовит данные для AutoTS. Восстанавливает pandas DataFrame из numpy-массивов.
 
         Args:
-            datasets (dict): Словарь с numpy-массивами.
+            datasets (dict): Словарь с numpy-массивами из кеша.
             target_cols (list[str]): Список имен целевых колонок.
             all_cols (list[str]): Полный список всех колонок.
 
         Returns:
             dict: Словарь с pandas DataFrame для каждой выборки.
         """
-        self.log.info("Подготовка DataFrame'ов для модели AutoTS...")
+        self.log.info("Восстановление DataFrame'ов для модели AutoTS...")
         output = {}
-        for key, data in datasets.items():
-            # AutoTS предпочитает работать с pandas DataFrame
-            output[f'{key}_df'] = pd.DataFrame(data, columns=all_cols)
-        
+        ### for key, data in datasets.items():
+        ###     # AutoTS предпочитает работать с pandas DataFrame
+        ###     output[f'{key}_df'] = pd.DataFrame(data, columns=all_cols)
+
+        # Восстанавливаем DataFrame'ы с их оригинальным DatetimeIndex
+        for key in ['train', 'validation', 'test']:
+            # Проверяем наличие как данных, так и индекса
+            if key in datasets and f"{key}_index" in datasets:
+                data_np = datasets[key]
+                index_np = datasets[f"{key}_index"]
+                
+                # Создаем полный DataFrame с правильным индексом
+                df = pd.DataFrame(data_np, columns=all_cols, index=pd.to_datetime(index_np))
+                
+                # Разделяем на X и y, как того требует AutoTSModel
+                feature_cols = [col for col in all_cols if col not in target_cols]
+                output[f'X_{key}_df'] = df[feature_cols]
+                output[f'y_{key}_df'] = df[target_cols]
+
         return output
 
     def _build_for_tabular(self, datasets: dict, target_cols: list[str], all_cols: list[str]) -> dict:

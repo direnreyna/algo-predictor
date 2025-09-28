@@ -216,6 +216,15 @@ class StatisticalAnalyzer:
         
         # 3. Применение дифференцирования (если необходимо)
         diff_mode = experiment_cfg.common_params.get("differencing", "false")
+
+        # Явное отключение дифференцирования для моделей, которые сами
+        # хорошо работают с трендами (например, AutoTS)
+        if diff_mode == "none":
+            self.log.info("Дифференцирование принудительно отключено в конфиге.")
+            # Возвращаем df после логарифмирования и флаг, что diff не применялся
+            df_copy.dropna(inplace=True)
+            return df_copy, False
+
         apply_diff = (diff_mode == "true") or (diff_mode == "auto" and any_target_is_non_stationary)
 
         if apply_diff:

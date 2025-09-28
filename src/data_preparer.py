@@ -56,7 +56,7 @@ class DataPreparer:
         Args:
             experiment_cfg (ExperimentConfig): Конфигурация эксперимента.
             mode (str): Режим запуска ('search' или 'train'/'finetune').
-        """ 
+        """
         self.log.info("Начало процесса предобработки данных")
         
         # 0. Генерируем имя файла и проверяем кеш
@@ -193,5 +193,5 @@ class DataPreparer:
 
         # 11. Сохранение выборок
         self.data_saver.save(file_path=cache_path, train=train_df, validation=val_df, test=test_df, original_test=original_test_df)
-        
+
         self.log.info("Процесс предобработки данных завершен.")

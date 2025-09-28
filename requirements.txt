@@ -1,5 +1,6 @@
 # requirements.txt
 
+autots==0.6.21
 anywidget==0.9.18
 statsmodels==0.14.5
 lightgbm==4.6.0

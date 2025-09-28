@@ -1,0 +1,85 @@
+# configs/autots_search.yaml
+
+# =================================================================
+# 0. ОБЩИЕ ПАРАМЕТРЫ
+# =================================================================
+mode: "train" # search / train / finetune
+
+# Имя эксперимента для MLflow
+experiment_name: "Default AutoTS Search"
+
+common_params:
+  asset_name: "EURUSD_D"
+  model_type: "autots"
+  feature_set_name: "base_indicators"
+  differencing: "none" # "none" / "auto"
+  column_mapping:
+    0: "Date"
+    1: "Time"
+    2: "Open"
+    3: "High"
+    4: "Low"
+    5: "Close"
+    6: "Volume"
+  task_type: "regression"
+  targets: ["Close"] # AutoTS поддерживает только один таргет
+  labeling_horizon: 1 # Для AutoTS лучше минимальный
+
+  # Объединять Train+Validation
+  train_on_full_data: true
+  
+  enrichment_data:
+    - filename: "BANK RATE EUR.csv"
+      data_type: "interest_rate"
+    - filename: "BANK RATE USD.csv"
+      data_type: "interest_rate"
+    - filename: "CPI_EUR.csv"
+      data_type: "cpi"
+    - filename: "CPI_USA.csv"
+      data_type: "cpi"
+  
+  visualization_params:
+    # Список данных для отображения на графике.
+    # Для каждого файла указывается список конкретных колонок.
+    plot_enrichment_data:
+      - filename: "BANK RATE EUR"
+        columns: ["rate"]
+      - filename: "BANK RATE USD"
+        columns: ["rate"]
+      - filename: "CPI_USA"
+        columns: ["cpi", "cpi_Fore"] # Можно указать несколько, например ["cpi", "cpi_Fore"]
+      - filename: "CPI_EUR"
+        columns: ["cpi", "cpi_Fore"]
+
+# =================================================================
+# 1. НАСТРОЙКИ ДЛЯ РЕЖИМА ПОИСКА (mode: "search")
+# =================================================================
+search_mode:
+  n_trials: 1 # AutoTS сам проводит поиск, поэтому 1 внешний trial
+  
+  # Параметры для AutoTS, которые можно перебирать через Optuna,
+  # но для начала оставим их фиксированными
+  model_params:
+    model_list: "superfast" # 'superfast', 'default', 'fast', 'all'
+    ensemble: "auto"
+    max_generations: 5
+    validation_metric: 'corr' ## smape, mae, rmse, corr, spl
+
+# =================================================================
+# 2. НАСТРОЙКИ ДЛЯ РЕЖИМА ОБУЧЕНИЯ (mode: "train")
+# =================================================================
+train_mode:
+  log_history_per_epoch: false
+  model_params:
+    model_list: "superfast" # Более качественный набор моделей
+    ensemble: "auto"
+    max_generations: 10
+    num_validations: 5
+    validation_metric: 'corr' ## smape, mae, rmse, corr, spl
+
+# =================================================================
+# 3. НАСТРОЙКИ ДЛЯ РЕЖИМА ДООБУЧЕНИЯ (mode: "finetune")
+# =================================================================
+finetune_mode:
+  log_history_per_epoch: false
+  source_run_id: null

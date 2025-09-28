@@ -38,6 +38,7 @@ class ModelTrainer:
         self.log.info(f"Класс {self.__class__.__name__} инициализирован.")
 
     def run(self, experiment_cfg: ExperimentConfig, warm_start: dict | None = None, log_history_per_epoch: bool = False) -> dict:
+        
         """Запускает полный цикл обучения модели, оркестрируя другие сервисы.
 
         Args:
@@ -63,7 +64,6 @@ class ModelTrainer:
         cache_path = self.cfg.DATA_DIR / cache_filename
         
         datasets = self.data_saver.load(file_path=cache_path)
-        original_test_df_raw = datasets['original_test']
         
         scaler_path = cache_path.with_suffix('.joblib')
         scaler = joblib.load(scaler_path)
@@ -73,8 +73,47 @@ class ModelTrainer:
             metadata = json.load(f)
         all_cols = metadata['columns']
         target_cols = metadata['target_columns']
+        original_cols = metadata.get('original_columns', all_cols)
+             
+        original_test_df_raw = datasets['original_test']
+        original_test_df = pd.DataFrame(original_test_df_raw, columns=original_cols)
 
-        original_test_df = pd.DataFrame(original_test_df_raw, columns=metadata['columns'])
+        ### # 1. Загрузка данных и артефактов
+        ### # Специальная логика для AutoTS, который требует DataFrame с DatetimeIndex
+        ### if model_type == 'autots':
+        ###     # Для AutoTS мы пропускаем кеширование на уровне numpy и работаем с DataFrame'ами
+        ###     # ПЕРЕСОЗДАЕМ DataPreparer, чтобы получить "свежие" DataFrame'ы
+        ###     # (Это временное решение, в будущем можно сделать более элегантно)
+        ###     from .data_preparer import DataPreparer
+        ###     preparer = DataPreparer(self.cfg, self.log)
+        ###     # В этом режиме `run` должен вернуть сами DataFrame'ы
+        ###     train_df, val_df, test_df, original_test_df, scaler = preparer.run(
+        ###         experiment_cfg, mode='train', return_dfs=True
+        ###     )
+        ###     
+        ###     datasets_for_builder = {'train': train_df, 'validation': val_df, 'test': test_df}
+        ###     all_cols = train_df.columns.tolist()
+        ###     target_cols = [col for col in all_cols if col.startswith('target_')]
+        ### 
+        ### else: # Стандартная логика для всех остальных моделей
+        ###     cache_filename = get_cache_filename(experiment_cfg, self.cfg.PREPROCESSING_VERSION)
+        ###     cache_path = self.cfg.DATA_DIR / cache_filename
+        ###     
+        ###     datasets = self.data_saver.load(file_path=cache_path)
+        ###     datasets_for_builder = datasets
+        ###     
+        ###     scaler_path = cache_path.with_suffix('.joblib')
+        ###     scaler = joblib.load(scaler_path)
+        ###     
+        ###     metadata_path = cache_path.with_suffix('.json')
+        ###     with open(metadata_path, 'r') as f:
+        ###         metadata = json.load(f)
+        ###     all_cols = metadata['columns']
+        ###     target_cols = metadata['target_columns']
+        ###     original_cols = metadata.get('original_columns', all_cols)
+        ###     
+        ###     original_test_df_raw = datasets['original_test']
+        ###     original_test_df = pd.DataFrame(original_test_df_raw, columns=original_cols)
 
         # Создаем экземпляр InverseTransformer, который инкапсулирует всю логику
         inverse_transformer = InverseTransformer(
@@ -123,15 +162,29 @@ class ModelTrainer:
         history = model_object.train(data_dict, train_params=experiment_cfg.train_params) # Передаем весь словарь 
         self.log.info("Обучение модели завершено.")
 
-
         # 5. Оценка модели
         # Выбираем правильный тестовый набор (DataFrame для табличных, numpy для остальных)
-        if model_type in ['lightgbm', 'catboost']:
+        if model_type in ['lightgbm', 'catboost', 'autots']:
             X_to_predict = data_dict['X_test_df']
         else:
             X_to_predict = data_dict['X_test']
 
-        predictions = model_object.predict(X_to_predict)
+        try:
+            predictions = model_object.predict(X_to_predict)
+        except np.linalg.LinAlgError as e:
+            # Эта ошибка возникает, когда математический аппарат модели (например, SVD)
+            # не может найти решение на тестовых данных. Модель считается нестабильной.
+            self.log.error(f"Математическая ошибка при предсказании: {e}. Модель нестабильна.", exc_info=True)
+            # Мы не можем продолжать, так как у нас нет предсказаний.
+            # Возвращаем "провальные" метрики, чтобы Optuna знала, что этот trial неудачный.
+            raise e
+            ### return {
+            ###     "ml_metrics": {"mse": 999999.0, "mae": 999999.0},
+            ###     "predictions": np.array([]),
+            ###     "test_df": pd.DataFrame(),
+            ###     "inverse_transformer": inverse_transformer
+            ### }
+
         if not isinstance(predictions, np.ndarray):
             try:
                 predictions = predictions.toarray() # для sparse matrix

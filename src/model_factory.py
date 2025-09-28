@@ -68,6 +68,10 @@ class ModelFactory:
             from .models.keras_lstm_model_2 import KerasLSTMModelV2
             return KerasLSTMModelV2(model_params)
         
+        elif model_type == "autots":
+            from .models.autots_model import AutoTSModel
+            return AutoTSModel(model_params)
+
         ################################################################################
         # Здесь будут другие модели: 'lstm', 'autots' и т.д.
         ################################################################################        
